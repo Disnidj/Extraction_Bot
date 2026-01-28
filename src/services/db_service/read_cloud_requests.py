@@ -21,7 +21,7 @@ def fetch_first_pending_request(db):
     try:
         query = """
         SELECT * FROM WebDB_Live.medical_cloud_requests
-        WHERE broker_id = %s AND Req_Id IN (9,10)
+        WHERE broker_id = %s AND Req_Id = 31
         ORDER BY Req_Id ASC
         LIMIT 1
         """

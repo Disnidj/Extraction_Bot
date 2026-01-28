@@ -11,154 +11,154 @@ email:
   subject: "Medical Insurance Documents"
 
 paths:
-  extracted_data_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/extracted_data/extracted_data.txt"
-  attachments_save_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/attachments"
-  logs_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/logs"
-  base_path: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare"
-  screenshots_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/screenshots"
-  referral_file_store_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/referral_file_store"
-  database_path: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/database.db"
+  extracted_data_dir: "extracted_data/extracted_data.txt"
+  attachments_save_dir: "attachments"
+  logs_dir: "logs"
+  base_path: "."
+  screenshots_dir: "screenshots"
+  referral_file_store_dir: "referral_file_store"
+  database_path: "database.db"
   # Electoneek_process_dir: "C:/Users/RPA-Dev/Desktop/Algospring/Lifecare_RPA_v2/BOT-Processing"
   # mail_zip_files : "C:/Users/RPA-Dev/Desktop/Algospring/Lifecare_RPA_v2/BOT-Processing/zip_files"
-  db_update: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/db_update"
+  db_update: "db_update"
 
 alsagr:
   username: "INTERACTIVE"
   password: "IIB@alsagr2025"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/attachments"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/alsagr/templates"
+  generated_census_dir: "attachments"
+  templates_dir: "company_data/alsagr/templates"
 
 iq2health:
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/iq/generated_census"
-  template_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/iq/templates"
+  generated_census_dir: "company_data/iq/generated_census"
+  template_dir: "company_data/iq/templates"
 
 aura:
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/aura/generated_census"
-  template_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/aura/templates"
+  generated_census_dir: "company_data/aura/generated_census"
+  template_dir: "company_data/aura/templates"
 
 orient:
   email: "renjith@unitrustib.com"
   password: "Unitrust@2025"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/orient/quotation_sheets"
+  quotation_download_dir: "company_data/orient/quotation_sheets"
 
 dni:
   email: "renjith@unitrustib.com"
   password: "Unitrust@2025"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/dni/quotation_sheets"
+  quotation_download_dir: "company_data/dni/quotation_sheets"
 
 rak:
   email: "renjith@unitrustib.com"
   password: "Unitrust@2025"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/rak/quotation_sheets"
+  quotation_download_dir: "company_data/rak/quotation_sheets"
 
 takaful:
   email: "quotes@lifecareinternational.com"
   password: "Lifecare2025!!"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/takaful/quotation_sheets"
+  quotation_download_dir: "company_data/takaful/quotation_sheets"
 
 NLG:
   username: "LIFECAREINTERNATIONAL"
   password: "LIFECAREINTERNATIONAL12$"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/nlg/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/nlg/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/nlg/quotation_sheets"
+  generated_census_dir: "company_data/nlg/generated_census"
+  templates_dir: "company_data/nlg/templates"
+  quotation_download_dir: "company_data/nlg/quotation_sheets"
 
 sukoon:
   email: "m.louise@lifecareinternational.com"
   password: "Welcome@1"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/sukoon/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/sukoon/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/sukoon/quotation_sheets"
-  temp_img_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/src/services/comparison_service/sukoon_temp_images"
+  generated_census_dir: "company_data/sukoon/generated_census"
+  templates_dir: "company_data/sukoon/templates"
+  quotation_download_dir: "company_data/sukoon/quotation_sheets"
+  temp_img_dir: "src/services/comparison_service/sukoon_temp_images"
 
 maxHealth:
   email: "quotes@lifecareinternational.com"
   password: "Lifecare#2024"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/maxhealth/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/maxhealth/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/maxhealth/quotation_sheets"
+  generated_census_dir: "company_data/maxhealth/generated_census"
+  templates_dir: "company_data/maxhealth/templates"
+  quotation_download_dir: "company_data/maxhealth/quotation_sheets"
 
 ison:
   email: "enb@lfci"
   password: "elym.b@lfc"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/ison/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/ison/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/ison/quotation_sheets"
+  generated_census_dir: "company_data/ison/generated_census"
+  templates_dir: "company_data/ison/templates"
+  quotation_download_dir: "company_data/ison/quotation_sheets"
 
 dubaiinsurance:
   username: "Hoshner"
   password: "Hoshner@LIB"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/dubaiinsurance/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/dubaiinsurance/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/dubaiinsurance/quotation_sheets"
+  generated_census_dir: "company_data/dubaiinsurance/generated_census"
+  templates_dir: "company_data/dubaiinsurance/templates"
+  quotation_download_dir: "company_data/dubaiinsurance/quotation_sheets"
 
 qatar:
   email: "broker@lifecareinsurance.com"
   password: "Lifecare@2025"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/qatar/quotation_sheets"
+  quotation_download_dir: "company_data/qatar/quotation_sheets"
 
 adnic:
   username: "azhar@LIB"
   password: "azhar@LIB"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/adnic/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/adnic/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/adnic/quotation_sheets"
+  generated_census_dir: "company_data/adnic/generated_census"
+  templates_dir: "company_data/adnic/templates"
+  quotation_download_dir: "company_data/adnic/quotation_sheets"
 
 ngi:
   email: ""
   password: ""
-  tool_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/ngi/excel_tool/NGI_Healthnet SME Plan Calculator.xlsm"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/ngi/quotation_sheets"
+  tool_dir: "company_data/ngi/excel_tool/NGI_Healthnet SME Plan Calculator.xlsm"
+  quotation_download_dir: "company_data/ngi/quotation_sheets"
 
 wataniatakaful:
   email: "Broker@LifeCare.com"
   password: "Welcome@2024"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/wataniatakaful/quotation_sheets"
+  quotation_download_dir: "company_data/wataniatakaful/quotation_sheets"
 
 GIG:
   username: "m.louise@lifecareinternational.com"
   password: "Lci#2020"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/gig/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/gig/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/gig/quotation_sheets"
+  generated_census_dir: "company_data/gig/generated_census"
+  templates_dir: "company_data/gig/templates"
+  quotation_download_dir: "company_data/gig/quotation_sheets"
 
 daman:
   username: "lifecareinternational"
   password: "Life@2022"
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/daman/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/daman/templates"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/daman/quotation_sheets"
+  generated_census_dir: "company_data/daman/generated_census"
+  templates_dir: "company_data/daman/templates"
+  quotation_download_dir: "company_data/daman/quotation_sheets"
 
 AI_ITTIHAD_AI_WATANI:
   username: "e.bronoso@lifecareinternational.com"
   password: "Lifecare@1234"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/alitthihad_alwatani/quotation_sheets"
+  quotation_download_dir: "company_data/alitthihad_alwatani/quotation_sheets"
 
 FIDELITY:
   username: "m.louise@lifecareinternational.com"
   password: "Lci@2025"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/fidelity_united/quotation_sheets"
+  quotation_download_dir: "company_data/fidelity_united/quotation_sheets"
 
 medgulf:
   email: "broker@lifecareadAUH.com"
   password: "Lifecare@2024"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/medgulf/quotation_sheets"
+  quotation_download_dir: "company_data/medgulf/quotation_sheets"
 
 medgulf_excel:
-  tool_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/medgulfexcel/excel_tool/MedGulf_NC Broker AP SME TOOL - 2024.12.10 - (till 2025.03.31).xlsm"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/alitthihad_alwatani/quotation_sheets"
+  tool_dir: "company_data/medgulfexcel/excel_tool/MedGulf_NC Broker AP SME TOOL - 2024.12.10 - (till 2025.03.31).xlsm"
+  quotation_download_dir: "company_data/alitthihad_alwatani/quotation_sheets"
 
 orient_excel:
-  tool_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/orientexcel/excel_tool/Orient Insurance_NC.xlsm"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/orientexcel/quotation_sheets"
+  tool_dir: "company_data/orientexcel/excel_tool/Orient Insurance_NC.xlsm"
+  quotation_download_dir: "company_data/orientexcel/quotation_sheets"
 
 april_excel:
-  tool_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/aprilexcel/excel_tool/APRIL_MyHEALTH Business_Dubai_Feb 2025_Micro SME.xlsx"
-  quotation_download_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/aprilexcel/quotation_sheets"
+  tool_dir: "company_data/aprilexcel/excel_tool/APRIL_MyHEALTH Business_Dubai_Feb 2025_Micro SME.xlsx"
+  quotation_download_dir: "company_data/aprilexcel/quotation_sheets"
 
 email_portals:
-  generated_census_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/email_portals/generated_census"
-  templates_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/email_portals/templates"
+  generated_census_dir: "company_data/email_portals/generated_census"
+  templates_dir: "company_data/email_portals/templates"
 
 ALLIANZ:
   email_to:
@@ -217,11 +217,11 @@ QATAR_INSURANCE:
   email_cc: "maheshi.l@algospring.com"
 
 comparison:
-  generated_comparison_dir: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/comparison/generated_comparisons"
-  template: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/company_data/comparison/templates/Gargash_Comparsion_Template.xlsx"
+  generated_comparison_dir: "company_data/comparison/generated_comparisons"
+  template: "company_data/comparison/templates/Gargash_Comparsion_Template.xlsx"
 
 poppler:
-  path: "C:/Users/AkalankaDias/OneDrive - Algospring (PVT) LTD/Documents/GitHub/Insurance_Playwright_Compare/external_programs/poppler-24.08.0/Library/bin"
+  path: "external_programs/poppler-24.08.0/Library/bin"
 
 captcha:
   api_key: "7da6201c72dca5a9798203eec1d6bb66"
