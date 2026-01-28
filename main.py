@@ -24,9 +24,8 @@ from src.pages.maxHealth.maxHealth_main import login_maxHealth
 
 # --- Imports for API-based extraction ---
 from src.pages.adnic.adnicmain_api import login_adnic_api
-# Future API implementations:
-# from src.pages.takaful.takafulmain_api import login_takaful_api
-# from src.pages.gig.gigmain_api import login_gig_api
+from src.pages.takaful.takafulmain_api import run_takaful_api_extraction
+from src.pages.qatar.qatar_main_api import run_qatar_api_extraction
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
 from src.utils.clear_folder import clear_files
@@ -78,9 +77,8 @@ PORTAL_GROUPS = {
 API_PORTAL_GROUPS = {
     "api_portals": [
         {"function": login_adnic_api, "name": "ADNIC"},
-        # Future implementations:
-        # {"function": login_takaful_api, "name": "Takaful"},
-        # {"function": login_gig_api, "name": "GIG"},
+        {"function": run_takaful_api_extraction, "name": "Takaful"},
+        {"function": run_qatar_api_extraction, "name": "QATAR"},
     ]
 }
 
@@ -180,7 +178,7 @@ def get_extraction_mode():
     print("")
     print("2. API Extraction (no database required)")
     print("   → Extracts ALL dropdown values directly from portal APIs")
-    print("   → Available portals: ADNIC (more coming soon)")
+    print("   → Available portals: ADNIC, Takaful, Qatar")
     print("=" * 70)
     
     while True:
