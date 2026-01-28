@@ -103,14 +103,16 @@ class QatarAPIExtractor:
         Save extraction results to JSON file.
         
         Args:
-            output_dir: Directory to save file
+            output_dir: Base directory to save file
             
         Returns:
             str: Path to saved file
         """
-        os.makedirs(output_dir, exist_ok=True)
+        # Save to portal-specific subfolder
+        portal_dir = os.path.join(output_dir, "qatar")
+        os.makedirs(portal_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"qatar_benefits_{timestamp}.json")
+        output_file = os.path.join(portal_dir, f"qatar_benefits_{timestamp}.json")
         
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(self.results, f, indent=2, ensure_ascii=False)

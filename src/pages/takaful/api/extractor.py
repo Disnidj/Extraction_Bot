@@ -146,7 +146,7 @@ class TakafulAPIExtractor:
         Save extraction results to JSON file.
         
         Args:
-            output_dir: Directory to save results
+            output_dir: Base directory to save results
             
         Returns:
             str: Path to saved file
@@ -154,9 +154,11 @@ class TakafulAPIExtractor:
         if not self.results:
             raise ValueError("No results to save. Run extract_all_benefits first.")
         
-        os.makedirs(output_dir, exist_ok=True)
+        # Save to portal-specific subfolder
+        portal_dir = os.path.join(output_dir, "takaful")
+        os.makedirs(portal_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"takaful_benefits_{timestamp}.json")
+        output_file = os.path.join(portal_dir, f"takaful_benefits_{timestamp}.json")
         
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(self.results, f, indent=2, ensure_ascii=False)
