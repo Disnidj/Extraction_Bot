@@ -38,7 +38,8 @@ from src.services.excel_service.gig_census_map import gig_map_census_data
 from src.services.excel_service.iq_census_map import iq_map_census_data
 from src.services.excel_service.daman_census_map import daman_map_census_data
 from src.utils.load_yaml import MAX_RETRIES, set_extracted_data_file
-from src.services.company_selector import get_company_selection, filter_portal_list
+# from src.services.company_selector import get_company_selection, filter_portal_list
+from src.services.company_selector_updated import get_portal_selection as get_company_selection, filter_portal_list
 # Configurable parameter for parallel execution
 MAX_PARALLEL_PORTALS = 3
 
