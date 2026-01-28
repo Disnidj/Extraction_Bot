@@ -230,13 +230,9 @@ async def run_api_extraction_mode(playwright, selected_companies):
         print("👋 Cancelled.")
         return
     
-    # Setup output file
-    print("\n🧹 Clearing old files...")
-    await clear_files()
-    
-    print("📁 Setting up output file...")
-    output_path = set_extracted_data_file()
-    print(f"   Output: {output_path}")
+    # Note: Each portal creates its own output folder and file
+    # e.g., extracted_data/adnic/adnic_extracted_20260128_132144.txt
+    #       extracted_data/takaful/takaful_extracted_20260128_133022.txt
     
     # Run extraction for each portal
     for portal in matching_portals:

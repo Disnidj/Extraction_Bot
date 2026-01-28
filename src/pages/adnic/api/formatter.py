@@ -2,12 +2,16 @@
 ADNIC Formatter
 
 Converts extraction results to text format.
-Writes records to the extracted_data file.
+Writes records to portal-specific folder: extracted_data/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
 """
 
 import json
+import os
 from typing import Dict, List
 from datetime import datetime
+
+# Portal name for this formatter
+PORTAL_NAME = "adnic"
 
 
 class ADNICFormatter:
@@ -16,6 +20,8 @@ class ADNICFormatter:
     
     Output format matches the standard extraction format:
     {"data": {"Portal": "...", "TPA": "...", "Network": "...", "field name": "...", "values": [...]}}
+    
+    Files are saved to: extracted_data/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
     """
     
     def __init__(self, output_path: str = None):
@@ -23,10 +29,36 @@ class ADNICFormatter:
         Initialize formatter with output path.
         
         Args:
-            output_path: Path to output file. If None, generates default path.
+            output_path: Path to output file. If None, generates portal-specific path.
         """
+        self.portal_name = PORTAL_NAME
         self.output_path = output_path
         self.records_written = 0
+        
+        # If no path provided, create portal-specific path
+        if not self.output_path:
+            self.output_path = self._generate_output_path()
+    
+    def _generate_output_path(self) -> str:
+        """
+        Generate portal-specific output path.
+        
+        Creates folder structure: extracted_data/{portal_name}/
+        File naming: {portal_name}_extracted_YYYYMMDD_HHMMSS.txt
+        
+        Returns:
+            Full path to output file
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Create portal-specific folder
+        folder = os.path.join("extracted_data", self.portal_name)
+        os.makedirs(folder, exist_ok=True)
+        
+        # Generate filename
+        filename = f"{self.portal_name}_extracted_{timestamp}.txt"
+        
+        return os.path.join(folder, filename)
     
     def format_record(self, record: Dict) -> str:
         """
@@ -50,11 +82,10 @@ class ADNICFormatter:
         Returns:
             Path to output file
         """
-        if not self.output_path:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.output_path = f"extracted_data/adnic_extracted_{timestamp}.txt"
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
         
-        with open(self.output_path, 'a', encoding='utf-8') as f:
+        with open(self.output_path, 'w', encoding='utf-8') as f:
             for record in records:
                 f.write(self.format_record(record) + "\n")
         

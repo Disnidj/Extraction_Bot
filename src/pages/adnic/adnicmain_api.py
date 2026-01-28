@@ -18,7 +18,6 @@ Usage:
 from patchright.async_api import Playwright
 from src.pages.adnic.api import ADNICAuth, ADNICApiExtractor, ADNICFormatter
 from src.utils.logger import adnic_logger
-from src.utils import load_yaml
 
 
 async def login_adnic_api(playwright: Playwright, referral_id=None):
@@ -52,15 +51,7 @@ async def login_adnic_api(playwright: Playwright, referral_id=None):
         page = await auth.establish_session()
         
         # =====================================================
-        # Step 6: Get output path
-        # =====================================================
-        output_path = load_yaml.EXTRACTED_DATA_DIR
-        if not output_path:
-            from src.utils.load_yaml import set_extracted_data_file
-            output_path = set_extracted_data_file()
-        
-        # =====================================================
-        # Step 7: Run API extraction
+        # Step 6: Run API extraction
         # =====================================================
         print("\n🔌 Step 6: Starting API extraction...\n")
         
@@ -68,17 +59,18 @@ async def login_adnic_api(playwright: Playwright, referral_id=None):
         records = await extractor.extract_all()
         
         # =====================================================
-        # Step 8: Save results
+        # Step 7: Save results to portal-specific folder
+        # Formatter creates: extracted_data/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
         # =====================================================
-        formatter = ADNICFormatter(output_path)
-        formatter.write_records(records)
+        formatter = ADNICFormatter()  # No path - uses portal-specific path
+        output_path = formatter.write_records(records)
         
         # =====================================================
-        # Step 9: Cleanup
+        # Step 8: Cleanup
         # =====================================================
         await auth.close()
         
-        adnic_logger.info(f"✅ ADNIC API Extraction Complete! {len(records)} records saved")
+        adnic_logger.info(f"✅ ADNIC API Extraction Complete! {len(records)} records saved to {output_path}")
         return True
         
     except Exception as e:
