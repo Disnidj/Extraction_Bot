@@ -21,6 +21,12 @@ from src.pages.wataniatakaful.watania_takafulmain import login_wataniatakaful
 from src.pages.daman.damanmain import login_daman
 from src.pages.rak.rak_main import login_rak
 from src.pages.maxHealth.maxHealth_main import login_maxHealth
+
+# --- Imports for API-based extraction ---
+from src.pages.adnic.adnicmain_api import login_adnic_api
+# Future API implementations:
+# from src.pages.takaful.takafulmain_api import login_takaful_api
+# from src.pages.gig.gigmain_api import login_gig_api
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
 from src.utils.clear_folder import clear_files
@@ -64,6 +70,17 @@ PORTAL_GROUPS = {
         {"function": login_daman, "name": "Daman"},
         {"function": login_rak, "name": "RAK"},
         {"function": login_maxHealth, "name": "MaxHealth"},
+    ]
+}
+
+# API extraction portal definitions
+# Portals with direct API extraction capability (no database/census required)
+API_PORTAL_GROUPS = {
+    "api_portals": [
+        {"function": login_adnic_api, "name": "ADNIC"},
+        # Future implementations:
+        # {"function": login_takaful_api, "name": "Takaful"},
+        # {"function": login_gig_api, "name": "GIG"},
     ]
 }
 
@@ -145,20 +162,138 @@ async def run_value_comparison():
     except Exception as e:
         print(f"❌ Error running value comparison: {e}")
         return False
+
+
+def get_extraction_mode():
+    """
+    Ask user to select extraction mode.
+    
+    Returns:
+        str: 'standard' for regular extraction, 'api' for API-based extraction
+    """
+    print("\n" + "=" * 70)
+    print("📋 SELECT EXTRACTION MODE")
+    print("=" * 70)
+    print("\n1. Standard Extraction (requires database + census data)")
+    print("   → Processes pending requests from database")
+    print("   → Uses real census data for quotation extraction")
+    print("")
+    print("2. API Extraction (no database required)")
+    print("   → Extracts ALL dropdown values directly from portal APIs")
+    print("   → Available portals: ADNIC (more coming soon)")
+    print("=" * 70)
+    
+    while True:
+        choice = input("\nEnter mode (1 or 2): ").strip()
+        if choice == '1':
+            return 'standard'
+        elif choice == '2':
+            return 'api'
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
+
+
+async def run_api_extraction_mode(playwright, selected_companies):
+    """
+    Run API-based extraction mode.
+    
+    Args:
+        playwright: Playwright instance
+        selected_companies: List of selected company names
+    """
+    # Filter to portals with API extraction available
+    api_portals = API_PORTAL_GROUPS["api_portals"]
+    api_portal_names = [p["name"] for p in api_portals]
+    
+    # Map selected companies to portal names
+    from src.services.company_selector_updated import COMPANY_TO_FUNCTION_MAPPING
+    selected_portal_names = [COMPANY_TO_FUNCTION_MAPPING.get(c, c) for c in selected_companies]
+    
+    # Find matching API portals
+    matching_portals = [p for p in api_portals if p["name"] in selected_portal_names]
+    unavailable = [n for n in selected_portal_names if n not in api_portal_names]
+    
+    if unavailable:
+        print(f"\n⚠️  No API extraction implemented yet for: {', '.join(unavailable)}")
+        print("   These will be skipped.")
+    
+    if not matching_portals:
+        print("\n❌ None of the selected portals have API extraction implemented.")
+        print(f"   Available API portals: {', '.join(api_portal_names)}")
+        return
+    
+    print(f"\n✅ Will extract from: {', '.join([p['name'] for p in matching_portals])}")
+    
+    # Confirm
+    confirm = input("\n▶️  Press Enter to start API extraction (or 'q' to quit): ").strip().lower()
+    if confirm == 'q':
+        print("👋 Cancelled.")
+        return
+    
+    # Note: Each portal creates its own output folder and file
+    # e.g., extracted_data/adnic/adnic_extracted_20260128_132144.txt
+    #       extracted_data/takaful/takaful_extracted_20260128_133022.txt
+    
+    # Run extraction for each portal
+    for portal in matching_portals:
+        print(f"\n{'=' * 60}")
+        print(f"🔄 Starting API extraction: {portal['name']}")
+        print(f"{'=' * 60}")
+        
+        try:
+            success = await portal["function"](playwright)
+            if success:
+                print(f"\n✅ {portal['name']} extraction completed!")
+            else:
+                print(f"\n❌ {portal['name']} extraction failed!")
+        except Exception as e:
+            print(f"\n❌ Error during {portal['name']} extraction: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    print("\n" + "=" * 60)
+    print("✅ API EXTRACTION COMPLETE")
+    print("=" * 60)
+
     
 if __name__ == "__main__":
     async def main():
+        # Ask for extraction mode
+        extraction_mode = get_extraction_mode()
+        
         # Interactive company selection
         selected_companies = get_company_selection()
-
-        # Filter portals based on selection
-        filtered_portals = filter_portal_list(PORTAL_GROUPS["main_portals"], selected_companies)
-        print(f"\n🎯 Processing {len(selected_companies)} selected companies: {', '.join(selected_companies)}")
-        print(f"   → Mapped to {len(filtered_portals)} portal functions: {', '.join([p['name'] for p in filtered_portals])}")
-
-        USE_PARALLEL_EXECUTION = True
+        
+        if not selected_companies:
+            print("\n❌ No companies selected. Exiting.")
+            return
 
         async with async_playwright() as playwright:
+            
+            # =====================================================
+            # API EXTRACTION MODE
+            # =====================================================
+            if extraction_mode == 'api':
+                print("\n" + "=" * 70)
+                print("🔌 API EXTRACTION MODE")
+                print("=" * 70)
+                await run_api_extraction_mode(playwright, selected_companies)
+                return
+            
+            # =====================================================
+            # STANDARD EXTRACTION MODE
+            # =====================================================
+            print("\n" + "=" * 70)
+            print("📊 STANDARD EXTRACTION MODE")
+            print("=" * 70)
+
+            # Filter portals based on selection
+            filtered_portals = filter_portal_list(PORTAL_GROUPS["main_portals"], selected_companies)
+            print(f"\n🎯 Processing {len(selected_companies)} selected companies: {', '.join(selected_companies)}")
+            print(f"   → Mapped to {len(filtered_portals)} portal functions: {', '.join([p['name'] for p in filtered_portals])}")
+
+            USE_PARALLEL_EXECUTION = True
+
             while True:
                 await clear_files()
 
