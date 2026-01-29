@@ -1,6 +1,8 @@
 # src/utils/logger.py
 import logging
 import os
+import glob
+from datetime import datetime
 from src.utils.load_yaml import LOGS_PATH
 
 # Ensure the directory exists
@@ -8,6 +10,22 @@ os.makedirs(LOGS_PATH, exist_ok=True)
 
 # Global variable to store current request ID for logging context
 _current_request_id = None
+
+def clear_all_logs():
+    """Clear all log files in the logs directory before starting a new run."""
+    try:
+        log_files = glob.glob(os.path.join(LOGS_PATH, "*.log"))
+        for log_file in log_files:
+            try:
+                # Truncate the file (clear content but keep the file)
+                with open(log_file, 'w', encoding='utf-8') as f:
+                    f.write("")
+                print(f"✓ Cleared: {os.path.basename(log_file)}")
+            except Exception as e:
+                print(f"⚠️  Could not clear {os.path.basename(log_file)}: {e}")
+        print(f"📋 Cleared {len(log_files)} log file(s)\n")
+    except Exception as e:
+        print(f"❌ Error clearing logs: {e}")
 
 def set_current_request_id(request_id):
     """Set the current request ID for logging context."""
@@ -130,6 +148,32 @@ def _create_issues_logger():
     return CustomLoggerAdapter(issues_logger, {})
 
 issues_logger = _create_issues_logger()
+
+# Create main execution logger for overall flow tracking
+def _create_main_execution_logger():
+    """Create a dedicated logger for main execution flow and timing."""
+    main_log_file = os.path.join(LOGS_PATH, "main_execution.log")
+    main_logger = logging.getLogger("main_execution")
+    main_logger.setLevel(logging.INFO)
+    
+    # Clear any existing handlers
+    if main_logger.handlers:
+        main_logger.handlers.clear()
+    
+    # Create file handler
+    file_handler = logging.FileHandler(main_log_file, mode='a', encoding='utf-8')
+    file_handler.setFormatter(COMMON_FORMATTER)
+    main_logger.addHandler(file_handler)
+    
+    # Add console handler for main execution to show timing info
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(COMMON_FORMATTER)
+    main_logger.addHandler(console_handler)
+    
+    main_logger.propagate = False
+    return CustomLoggerAdapter(main_logger, {})
+
+main_execution_logger = _create_main_execution_logger()
 
 # Pre-create loggers for each portal so they can be imported directly
 alsagr_logger = _create_logger("alsagr")

@@ -1,6 +1,7 @@
 import asyncio
 from playwright.async_api import async_playwright
 import subprocess
+from datetime import datetime
 
 # --- Imports for portals and census mapping ---
 from src.pages.takaful.takafulmain import login_takaful
@@ -26,6 +27,8 @@ from src.pages.maxHealth.maxHealth_main import login_maxHealth
 from src.pages.adnic.adnicmain_api import login_adnic_api
 from src.pages.takaful.takafulmain_api import run_takaful_api_extraction
 from src.pages.qatar.qatar_main_api import run_qatar_api_extraction
+from src.pages.sukoon.sukoonmain_api import login_sukoon_api
+from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
 from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
@@ -80,6 +83,7 @@ API_PORTAL_GROUPS = {
         {"function": login_adnic_api, "name": "ADNIC"},
         {"function": run_takaful_api_extraction, "name": "Takaful"},
         {"function": run_qatar_api_extraction, "name": "QATAR"},
+        {"function": login_sukoon_api, "name": "Sukoon"},
         {"function": run_maxhealth_api_extraction, "name": "MaxHealth"},
     ]
 }
@@ -101,26 +105,45 @@ async def run_census_mapping():
         except Exception as e:
             print(f"Error in {func.__name__}: {e}")
 
-async def login_portal_with_semaphore(sem, portal, playwright, results, env='default'):
-    """Run a single portal login with semaphore control."""
+async def login_portal_with_semaphore(sem, portal, playwright, results, portal_timings, env='default'):
+    """Run a single portal login with semaphore control and timing tracking."""
     portal_name = portal["name"]
     async with sem:
+        # Record start time
+        start_time = datetime.now()
+        portal_timings[portal_name] = {'start': start_time, 'end': None, 'duration': None}
+        
         print(f"Started login for {portal_name}")
+        main_execution_logger.info(f"🚀 Portal '{portal_name}' - Started at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
         try:
             result = await portal["function"](playwright, env)
             results[portal_name] = result
         except Exception as e:
             print(f"Error in {portal_name}: {e}")
+            main_execution_logger.error(f"❌ Portal '{portal_name}' - Error: {e}")
             results[portal_name] = False
+        
+        # Record end time and calculate duration
+        end_time = datetime.now()
+        duration = end_time - start_time
+        portal_timings[portal_name]['end'] = end_time
+        portal_timings[portal_name]['duration'] = duration
+        
         print(f"Completed login for {portal_name}")
+        main_execution_logger.info(
+            f"✅ Portal '{portal_name}' - Completed at {end_time.strftime('%Y-%m-%d %H:%M:%S')} | "
+            f"Duration: {duration.total_seconds():.2f}s ({int(duration.total_seconds() // 60)}m {int(duration.total_seconds() % 60)}s)"
+        )
 
 async def run_portals_with_concurrency_limit(portals, playwright, env='default'):
-    """Run all portals with a concurrency limit."""
+    """Run all portals with a concurrency limit and return results with timings."""
     sem = asyncio.Semaphore(MAX_PARALLEL_PORTALS)
     results = {}
-    tasks = [asyncio.create_task(login_portal_with_semaphore(sem, portal, playwright, results, env)) for portal in portals]
+    portal_timings = {}
+    tasks = [asyncio.create_task(login_portal_with_semaphore(sem, portal, playwright, results, portal_timings, env)) for portal in portals]
     await asyncio.gather(*tasks)
-    return results
+    return results, portal_timings
 
 def final_update_status(req_id, new_status):
     """Opens a dedicated connection to perform the final status update."""
@@ -195,7 +218,7 @@ def get_extraction_mode():
 
 async def run_api_extraction_mode(playwright, selected_companies):
     """
-    Run API-based extraction mode.
+    Run API-based extraction mode with timing tracking.
     
     Args:
         playwright: Playwright instance
@@ -230,9 +253,19 @@ async def run_api_extraction_mode(playwright, selected_companies):
         print("👋 Cancelled.")
         return
     
+    # Record overall start time
+    overall_start_time = datetime.now()
+    main_execution_logger.info(f"\n{'='*70}")
+    main_execution_logger.info(f"🚀 API EXTRACTION FLOW STARTED")
+    main_execution_logger.info(f"Start Time: {overall_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    main_execution_logger.info(f"Portals to process: {', '.join([p['name'] for p in matching_portals])}")
+    main_execution_logger.info(f"{'='*70}")
+    
     # Note: Each portal creates its own output folder and file
     # e.g., extracted_data/adnic/adnic_extracted_20260128_132144.txt
     #       extracted_data/takaful/takaful_extracted_20260128_133022.txt
+    
+    portal_timings = {}
     
     # Run extraction for each portal
     for portal in matching_portals:
@@ -240,24 +273,77 @@ async def run_api_extraction_mode(playwright, selected_companies):
         print(f"🔄 Starting API extraction: {portal['name']}")
         print(f"{'=' * 60}")
         
+        portal_start = datetime.now()
+        portal_timings[portal['name']] = {'start': portal_start, 'end': None, 'duration': None}
+        main_execution_logger.info(f"🚀 Portal '{portal['name']}' - Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
+        
         try:
             success = await portal["function"](playwright)
+            portal_end = datetime.now()
+            portal_duration = portal_end - portal_start
+            portal_timings[portal['name']]['end'] = portal_end
+            portal_timings[portal['name']]['duration'] = portal_duration
+            
             if success:
                 print(f"\n✅ {portal['name']} extraction completed!")
+                main_execution_logger.info(
+                    f"✅ Portal '{portal['name']}' - Completed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"Duration: {portal_duration.total_seconds():.2f}s ({int(portal_duration.total_seconds() // 60)}m {int(portal_duration.total_seconds() % 60)}s)"
+                )
             else:
                 print(f"\n❌ {portal['name']} extraction failed!")
+                main_execution_logger.error(
+                    f"❌ Portal '{portal['name']}' - Failed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"Duration: {portal_duration.total_seconds():.2f}s"
+                )
         except Exception as e:
+            portal_end = datetime.now()
+            portal_duration = portal_end - portal_start
+            portal_timings[portal['name']]['end'] = portal_end
+            portal_timings[portal['name']]['duration'] = portal_duration
+            
             print(f"\n❌ Error during {portal['name']} extraction: {e}")
+            main_execution_logger.error(
+                f"❌ Portal '{portal['name']}' - Error at {portal_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
+                f"Duration: {portal_duration.total_seconds():.2f}s"
+            )
             import traceback
             traceback.print_exc()
     
-    print("\n" + "=" * 60)
+    # Calculate overall duration
+    overall_end_time = datetime.now()
+    overall_duration = overall_end_time - overall_start_time
+    
+    # Log summary
+    print("\n" + "=" * 70)
     print("✅ API EXTRACTION COMPLETE")
-    print("=" * 60)
+    print("=" * 70)
+    
+    main_execution_logger.info(f"\n{'='*70}")
+    main_execution_logger.info(f"📊 API EXTRACTION SUMMARY")
+    main_execution_logger.info(f"{'='*70}")
+    main_execution_logger.info(f"Overall End Time: {overall_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    main_execution_logger.info(f"Total Duration: {overall_duration.total_seconds():.2f}s ({int(overall_duration.total_seconds() // 60)}m {int(overall_duration.total_seconds() % 60)}s)")
+    main_execution_logger.info(f"\n📋 Portal-wise Timing:")
+    
+    for portal_name, timing in portal_timings.items():
+        if timing['duration']:
+            main_execution_logger.info(
+                f"  • {portal_name}: {timing['duration'].total_seconds():.2f}s "
+                f"({int(timing['duration'].total_seconds() // 60)}m {int(timing['duration'].total_seconds() % 60)}s) | "
+                f"{timing['start'].strftime('%H:%M:%S')} → {timing['end'].strftime('%H:%M:%S')}"
+            )
+    main_execution_logger.info(f"{'='*70}\n")
 
     
 if __name__ == "__main__":
     async def main():
+        # Clear all log files before starting new run
+        print("\n" + "=" * 70)
+        print("🧹 CLEARING LOG FILES")
+        print("=" * 70)
+        clear_all_logs()
+        
         # Ask for extraction mode
         extraction_mode = get_extraction_mode()
         
@@ -324,13 +410,51 @@ if __name__ == "__main__":
 
                 if USE_PARALLEL_EXECUTION:
                     print(f"Starting portals with parallel execution (max concurrency: {MAX_PARALLEL_PORTALS})...")
-                    portal_results = await run_portals_with_concurrency_limit(
+                    
+                    # Record request start time
+                    request_start_time = datetime.now()
+                    main_execution_logger.info(f"\n{'='*70}")
+                    main_execution_logger.info(f"🚀 REQUEST {processed_req_id} PROCESSING STARTED")
+                    main_execution_logger.info(f"Start Time: {request_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    main_execution_logger.info(f"Portals to process: {', '.join([p['name'] for p in filtered_portals])}")
+                    main_execution_logger.info(f"{'='*70}")
+                    
+                    portal_results, portal_timings = await run_portals_with_concurrency_limit(
                         filtered_portals, playwright, 'default'
                     )
+                    
+                    # Record request end time
+                    request_end_time = datetime.now()
+                    request_duration = request_end_time - request_start_time
+                    
                     failed_portals = [name for name, success in portal_results.items() if not success]
                     successful_portals = [name for name, success in portal_results.items() if success]
                     print(f"Successfully logged in portals: {', '.join(successful_portals) if successful_portals else 'None'}")
                     print(f"Failed portals: {', '.join(failed_portals) if failed_portals else 'None'}")
+                    
+                    # Log request summary
+                    main_execution_logger.info(f"\n{'='*70}")
+                    main_execution_logger.info(f"📊 REQUEST {processed_req_id} PROCESSING SUMMARY")
+                    main_execution_logger.info(f"{'='*70}")
+                    main_execution_logger.info(f"End Time: {request_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                    main_execution_logger.info(f"Total Duration: {request_duration.total_seconds():.2f}s ({int(request_duration.total_seconds() // 60)}m {int(request_duration.total_seconds() % 60)}s)")
+                    main_execution_logger.info(f"\n📋 Portal-wise Timing:")
+                    
+                    for portal_name, timing in portal_timings.items():
+                        if timing['duration']:
+                            status_icon = "✅" if portal_results.get(portal_name) else "❌"
+                            main_execution_logger.info(
+                                f"  {status_icon} {portal_name}: {timing['duration'].total_seconds():.2f}s "
+                                f"({int(timing['duration'].total_seconds() // 60)}m {int(timing['duration'].total_seconds() % 60)}s) | "
+                                f"{timing['start'].strftime('%H:%M:%S')} → {timing['end'].strftime('%H:%M:%S')}"
+                            )
+                    
+                    main_execution_logger.info(f"\n✅ Successful: {len(successful_portals)}/{len(filtered_portals)} portals")
+                    if successful_portals:
+                        main_execution_logger.info(f"   {', '.join(successful_portals)}")
+                    if failed_portals:
+                        main_execution_logger.info(f"❌ Failed: {', '.join(failed_portals)}")
+                    main_execution_logger.info(f"{'='*70}\n")
                 
                 # --- CORRECTED FINAL STATUS UPDATE ---
                 print(f"\nUpdating status to 'Completed' for Req_Id {processed_req_id}...")
