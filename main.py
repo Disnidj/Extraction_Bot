@@ -26,6 +26,7 @@ from src.pages.maxHealth.maxHealth_main import login_maxHealth
 from src.pages.adnic.adnicmain_api import login_adnic_api
 from src.pages.takaful.takafulmain_api import run_takaful_api_extraction
 from src.pages.qatar.qatar_main_api import run_qatar_api_extraction
+from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
 from src.utils.clear_folder import clear_files
@@ -79,6 +80,7 @@ API_PORTAL_GROUPS = {
         {"function": login_adnic_api, "name": "ADNIC"},
         {"function": run_takaful_api_extraction, "name": "Takaful"},
         {"function": run_qatar_api_extraction, "name": "QATAR"},
+        {"function": run_maxhealth_api_extraction, "name": "MaxHealth"},
     ]
 }
 
