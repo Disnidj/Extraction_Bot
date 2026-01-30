@@ -46,6 +46,7 @@ class SukoonApiExtractor:
         self.stats = {
             "regions_count": 0,
             "indemnity_count": 0,
+            "network_count": 0,
             "records_count": 0,
         }
     
@@ -54,16 +55,22 @@ class SukoonApiExtractor:
         field_name: str,
         values: List[str],
         region: str = "",
-        indemnity_limit: str = ""
+        tpa: str = "",
+        network: str = ""
     ) -> Dict:
         """
         Create a record in the standard extraction format.
+        
+        Mapping to match ADNIC/Qatar/Takaful format:
+        - TPA = Indemnity Limit (master cascading field)
+        - Network = Applicable Network (second-level cascading field)
         
         Args:
             field_name: Name of the dropdown field
             values: List of option values
             region: Region name (Dubai, etc.)
-            indemnity_limit: Indemnity limit context
+            tpa: TPA value (Indemnity Limit in Sukoon, e.g., "1000000")
+            network: Network value (Applicable Network in Sukoon, e.g., "Edge")
             
         Returns:
             Dict in extraction format
@@ -72,9 +79,8 @@ class SukoonApiExtractor:
             "data": {
                 "Portal": PORTAL_NAME,
                 "Region": region,
-                "Indemnity Limit": indemnity_limit,
-                "TPA": "",  # Sukoon doesn't have TPA in same sense as ADNIC
-                "Network": "",
+                "TPA": tpa,  # Indemnity Limit maps to TPA
+                "Network": network,  # Applicable Network maps to Network
                 "field name": field_name,
                 "values": values
             }
@@ -143,9 +149,9 @@ class SukoonApiExtractor:
         self.stats["regions_count"] += 1
         
         # ═══════════════════════════════════════════════════════════
-        # Step 1: Get the master list of indemnity options
+        # Step 1: Get the master list of TPA options (Indemnity Limit = TPA)
         # ═══════════════════════════════════════════════════════════
-        print("\n📥 Step 1: Getting Indemnity Limit options (master switch)...")
+        print("\n📥 Step 1: Getting TPA options (Indemnity Limit = TPA in Sukoon)...")
         indemnity_options = await self.client.get_indemnity_options(region)
         
         if not indemnity_options:
@@ -161,31 +167,31 @@ class SukoonApiExtractor:
             print("   ❌ Could not get indemnity options. Skipping region.")
             return
         
-        print(f"   ✓ Found {len(indemnity_options)} indemnity limits")
+        print(f"   ✓ Found {len(indemnity_options)} TPAs (Indemnity Limits)")
         for opt in indemnity_options:
             print(f"      • {opt.text} (ID: {opt.value})")
         
-        # Record the indemnity limits themselves (master list)
+        # Record the TPA options (Indemnity Limit = TPA in Sukoon)
+        # This is the master list showing all available TPAs
         record = self._create_record(
-            "Indemnity Limit",
+            "TPA",
             [opt.text for opt in indemnity_options],
             region=region
         )
         self.records.append(record)
         
         # ═══════════════════════════════════════════════════════════
-        # Step 2: For each indemnity limit, get all sub-options
-        # This is the MAIN LOOP - only ONE level deep!
+        # Step 2: For each TPA (Indemnity Limit), get networks and sub-options
+        # TWO LEVEL LOOP: TPA → Network → Other fields
         # ═══════════════════════════════════════════════════════════
-        print(f"\n📥 Step 2: Extracting options for each indemnity limit...")
+        print(f"\n📥 Step 2: Extracting options for each TPA + Network combination...")
         
         for idx, indemnity in enumerate(indemnity_options, 1):
-            print(f"\n   💰 [{idx}/{len(indemnity_options)}] Limit: {indemnity.text} (ID: {indemnity.value})")
+            print(f"\n   🏢 TPA [{idx}/{len(indemnity_options)}]: {indemnity.text} (ID: {indemnity.value})")
             
             self.stats["indemnity_count"] += 1
             
-            # Call the Mega API with this indemnityId
-            # This ONE call returns ALL options for this limit tier!
+            # First call: Get networks available for this TPA
             all_options = await self.client.call_populate_ddl(
                 indemnity_id=indemnity.value,
                 region_name=region
@@ -195,29 +201,84 @@ class SukoonApiExtractor:
                 print(f"      ⚠️ No options returned for indemnityId={indemnity.value}")
                 continue
             
-            # Record each field's options
-            for field_key, options in all_options.items():
-                if field_key == "ProductIndemnity":
-                    continue  # Already recorded above
-                
-                if not options:
-                    continue  # Skip empty lists
-                
-                field_info = RESPONSE_FIELD_MAPPING.get(field_key, {})
-                display_name = field_info.get("display_name", field_key)
-                
-                # Create record with indemnity context
+            # Get network options for this TPA
+            network_options = all_options.get("IndemnityNetwork", [])
+            
+            # Record the network options list for this TPA
+            if network_options:
                 record = self._create_record(
-                    display_name,
-                    [opt.text for opt in options],
+                    "Network",
+                    [opt.text for opt in network_options],
                     region=region,
-                    indemnity_limit=indemnity.text
+                    tpa=indemnity.text
                 )
                 self.records.append(record)
-                
-                print(f"      ✓ {display_name}: {len(options)} options")
+                print(f"      📋 Networks available: {len(network_options)}")
             
-            # Small delay to avoid rate limiting
+            # ═══════════════════════════════════════════════════════
+            # Step 2b: For each Network, get the dependent options
+            # This tests if options change per network selection
+            # ═══════════════════════════════════════════════════════
+            if network_options:
+                for net_idx, network in enumerate(network_options, 1):
+                    print(f"\n      🔹 Network [{net_idx}/{len(network_options)}]: {network.text}")
+                    self.stats["network_count"] += 1
+                    
+                    # Try calling API with networkId to see if options differ
+                    network_options_result = await self.client.call_populate_ddl(
+                        indemnity_id=indemnity.value,
+                        region_name=region,
+                        network_id=network.value
+                    )
+                    
+                    # Record each field's options with TPA + Network context
+                    for field_key, options in network_options_result.items():
+                        if field_key in ["ProductIndemnity", "IndemnityNetwork"]:
+                            continue  # Already recorded above
+                        
+                        if not options:
+                            continue  # Skip empty lists
+                        
+                        field_info = RESPONSE_FIELD_MAPPING.get(field_key, {})
+                        display_name = field_info.get("display_name", field_key)
+                        
+                        # Create record with TPA + Network context
+                        record = self._create_record(
+                            display_name,
+                            [opt.text for opt in options],
+                            region=region,
+                            tpa=indemnity.text,
+                            network=network.text
+                        )
+                        self.records.append(record)
+                        
+                        print(f"         ✓ {display_name}: {len(options)} options")
+                    
+                    # Small delay to avoid rate limiting
+                    await asyncio.sleep(0.2)
+            else:
+                # No networks - record fields without network context
+                for field_key, options in all_options.items():
+                    if field_key == "ProductIndemnity":
+                        continue
+                    
+                    if not options:
+                        continue
+                    
+                    field_info = RESPONSE_FIELD_MAPPING.get(field_key, {})
+                    display_name = field_info.get("display_name", field_key)
+                    
+                    record = self._create_record(
+                        display_name,
+                        [opt.text for opt in options],
+                        region=region,
+                        tpa=indemnity.text
+                    )
+                    self.records.append(record)
+                    
+                    print(f"      ✓ {display_name}: {len(options)} options")
+            
+            # Small delay between TPAs
             await asyncio.sleep(0.3)
     
     def _print_summary(self):
@@ -228,11 +289,12 @@ class SukoonApiExtractor:
         print("📊 SUKOON EXTRACTION SUMMARY")
         print("=" * 60)
         print(f"   Regions processed:     {self.stats['regions_count']}")
-        print(f"   Indemnity limits:      {self.stats['indemnity_count']}")
+        print(f"   TPAs (Indemnity):      {self.stats['indemnity_count']}")
+        print(f"   Networks processed:    {self.stats['network_count']}")
         print(f"   Total API calls:       {client_stats['total_api_calls']}")
         print(f"   Total records saved:   {self.stats['records_count']}")
         print("=" * 60)
-        print("📌 Note: Sukoon uses 'Mega API' - fewer calls than ADNIC!")
+        print("📌 Note: TPA = Indemnity Limit, Network = Applicable Network")
         print("=" * 60)
     
     def get_records(self) -> List[Dict]:

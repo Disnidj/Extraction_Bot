@@ -17,6 +17,7 @@ from .mapping import (
     NETWORK_DEPENDENT_APIS,
     TCOVER_DEPENDENT_APIS,
     PORTAL_NAME,
+    PORTAL_REGION,
 )
 
 
@@ -71,7 +72,7 @@ class ADNICApiExtractor:
         data = {
             "Portal": PORTAL_NAME,
             "TPA": tpa,
-            "Region": "",
+            "Region": PORTAL_REGION,
             "Network": network,
             "field name": field_name,
             "values": values
