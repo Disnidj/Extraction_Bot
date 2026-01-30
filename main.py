@@ -203,7 +203,7 @@ def get_extraction_mode():
     print("")
     print("2. API Extraction (no database required)")
     print("   → Extracts ALL dropdown values directly from portal APIs")
-    print("   → Available portals: ADNIC, Takaful, Qatar")
+    # print("   → Available portals: ADNIC, Takaful, Qatar")
     print("=" * 70)
     
     while True:
