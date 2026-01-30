@@ -65,20 +65,23 @@ class MaxHealthFormatter:
         lookups = self.results.get("lookups", {})
         plans_by_combo = self.results.get("plans_by_combination", {})
         
+        # Region is always Dubai (filtered during extraction)
+        region = "Dubai"
+        
         # Step 1: Standalone fields (no TPA/Network context)
         # TPA dropdown
         networks = lookups.get("networks", [])
         if networks:
-            self._add_line(portal, "", "", "", "TPA", 
+            self._add_line(portal, "", region, "", "TPA", 
                           [n.get("title") for n in networks if n.get("title")])
         
         # Location (filtered to Dubai only)
-        self._add_line(portal, "", "", "", "Location", ["Dubai"])
+        self._add_line(portal, "", region, "", "Location", ["Dubai"])
         
         # Quotation For (all options)
         client_statuses = lookups.get("clientStatuses", [])
         if client_statuses:
-            self._add_line(portal, "", "", "", "Quotation For",
+            self._add_line(portal, "", region, "", "Quotation For",
                           [cs.get("title") for cs in client_statuses if cs.get("title")])
         
         # Step 2: For each TPA, show available Networks
@@ -93,7 +96,7 @@ class MaxHealthFormatter:
                 tpa_to_networks[tpa_name].append(network_name)
         
         for tpa_name, network_list in tpa_to_networks.items():
-            self._add_line(portal, tpa_name, "", "", "Network", network_list)
+            self._add_line(portal, tpa_name, region, "", "Network", network_list)
         
         # Step 3: For each TPA + Network, show Policy Holder Type
         for combo_key, combo_data in plans_by_combo.items():
@@ -105,7 +108,7 @@ class MaxHealthFormatter:
             # Policy Holder Type for this combination
             if valid_target_groups:
                 target_group_names = [tg.get("name") for tg in valid_target_groups if tg.get("name")]
-                self._add_line(portal, tpa_name, "", network_name, "Policy Holder Type", target_group_names)
+                self._add_line(portal, tpa_name, region, network_name, "Policy Holder Type", target_group_names)
             
             # Step 4: For each Policy Holder Type, show Plans with parent context
             # This matches ADNIC format where each child row includes parent selection
@@ -117,7 +120,7 @@ class MaxHealthFormatter:
                     if tg_name:
                         # Add Plan row with Policy Holder Type context
                         self._add_line(
-                            portal, tpa_name, "", network_name, "Plan", plan_values,
+                            portal, tpa_name, region, network_name, "Plan", plan_values,
                             extra_context={"Policy Holder Type": tg_name}
                         )
         
