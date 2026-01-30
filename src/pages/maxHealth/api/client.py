@@ -4,11 +4,16 @@ HTTP client to fetch dropdown data from MaxHealth API.
 """
 
 import aiohttp
+import ssl
 import json
 import os
+import urllib3
 from datetime import datetime, timedelta
 from src.utils.logger import maxhealth_logger
 from src.utils.load_yaml import MAXHEALTH_GENERATED_CENSUS_DIR
+
+# Suppress SSL warnings (MaxHealth cert has issues on some systems)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class MaxHealthAPIClient:
@@ -27,10 +32,19 @@ class MaxHealthAPIClient:
         self.session = None
         # Path to generated census file (with actual member data)
         self.census_file_path = os.path.join(MAXHEALTH_GENERATED_CENSUS_DIR, "MaxHealth.xlsx")
+        # Create SSL context that doesn't verify certificates
+        # (MaxHealth's certificate has issues on some systems)
+        self.ssl_context = ssl.create_default_context()
+        self.ssl_context.check_hostname = False
+        self.ssl_context.verify_mode = ssl.CERT_NONE
     
     async def __aenter__(self):
-        """Create aiohttp session."""
-        self.session = aiohttp.ClientSession(headers=self.auth.get_headers())
+        """Create aiohttp session with SSL bypass."""
+        connector = aiohttp.TCPConnector(ssl=self.ssl_context)
+        self.session = aiohttp.ClientSession(
+            headers=self.auth.get_headers(),
+            connector=connector
+        )
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -118,7 +132,7 @@ class MaxHealthAPIClient:
                           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
             }
             
-            response = requests.post(url, headers=headers, data=form_data, files=files)
+            response = requests.post(url, headers=headers, data=form_data, files=files, verify=False)
             
             if response.status_code == 200:
                 result = response.json()
