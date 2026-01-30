@@ -21,18 +21,20 @@ class ADNICFormatter:
     Output format matches the standard extraction format:
     {"data": {"Portal": "...", "TPA": "...", "Network": "...", "field name": "...", "values": [...]}}
     
-    Files are saved to: extracted_data/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
+    Files are saved to: {output_dir}/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
     """
     
-    def __init__(self, output_path: str = None):
+    def __init__(self, output_path: str = None, output_dir: str = "extracted_data"):
         """
         Initialize formatter with output path.
         
         Args:
             output_path: Path to output file. If None, generates portal-specific path.
+            output_dir: Base output directory for extracted files.
         """
         self.portal_name = PORTAL_NAME
         self.output_path = output_path
+        self.output_dir = output_dir
         self.records_written = 0
         
         # If no path provided, create portal-specific path
@@ -43,7 +45,7 @@ class ADNICFormatter:
         """
         Generate portal-specific output path.
         
-        Creates folder structure: extracted_data/{portal_name}/
+        Creates folder structure: {output_dir}/{portal_name}/
         File naming: {portal_name}_extracted_YYYYMMDD_HHMMSS.txt
         
         Returns:
@@ -52,7 +54,7 @@ class ADNICFormatter:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # Create portal-specific folder
-        folder = os.path.join("extracted_data", self.portal_name)
+        folder = os.path.join(self.output_dir, self.portal_name)
         os.makedirs(folder, exist_ok=True)
         
         # Generate filename

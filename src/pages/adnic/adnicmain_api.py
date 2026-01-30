@@ -20,7 +20,7 @@ from src.pages.adnic.api import ADNICAuth, ADNICApiExtractor, ADNICFormatter
 from src.utils.logger import adnic_logger
 
 
-async def login_adnic_api(playwright: Playwright, referral_id=None):
+async def login_adnic_api(playwright: Playwright, referral_id=None, output_dir: str = "extracted_data"):
     """
     ADNIC API extraction mode - main entry point.
     
@@ -35,6 +35,7 @@ async def login_adnic_api(playwright: Playwright, referral_id=None):
     Args:
         playwright: Playwright instance
         referral_id: Optional referral ID (not used for API extraction)
+        output_dir: Base output directory for extracted files
         
     Returns:
         bool: True if extraction successful
@@ -60,9 +61,9 @@ async def login_adnic_api(playwright: Playwright, referral_id=None):
         
         # =====================================================
         # Step 7: Save results to portal-specific folder
-        # Formatter creates: extracted_data/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
+        # Formatter creates: {output_dir}/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
         # =====================================================
-        formatter = ADNICFormatter()  # No path - uses portal-specific path
+        formatter = ADNICFormatter(output_dir=output_dir)
         output_path = formatter.write_records(records)
         
         # =====================================================

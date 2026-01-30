@@ -77,12 +77,13 @@ async def login_and_get_token(playwright: Playwright):
         return None, None, None
 
 
-async def run_maxhealth_api_extraction(playwright: Playwright):
+async def run_maxhealth_api_extraction(playwright: Playwright, output_dir: str = "extracted_data"):
     """
     Main function to run MaxHealth API-based extraction.
     
     Args:
         playwright: Playwright instance
+        output_dir: Base output directory for extracted files
         
     Returns:
         dict: Extraction results or None on failure
@@ -118,7 +119,7 @@ async def run_maxhealth_api_extraction(playwright: Playwright):
             return None
         
         # Step 3: Save JSON results
-        json_file = extractor.save_results()
+        json_file = extractor.save_results(output_dir=output_dir)
         extractor.print_summary()
         
         # Step 4: Format and save to text file
@@ -127,7 +128,7 @@ async def run_maxhealth_api_extraction(playwright: Playwright):
         print("=" * 60)
         
         formatter = MaxHealthFormatter(results)
-        txt_file = formatter.format_and_save()
+        txt_file = formatter.format_and_save(output_dir=output_dir)
         formatter.print_summary()
         
         return {

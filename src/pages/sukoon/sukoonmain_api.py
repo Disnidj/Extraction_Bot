@@ -25,7 +25,7 @@ from src.pages.sukoon.api import SukoonAuth, SukoonApiExtractor, SukoonFormatter
 from src.utils.logger import sukoon_logger
 
 
-async def login_sukoon_api(playwright: Playwright, referral_id=None):
+async def login_sukoon_api(playwright: Playwright, referral_id=None, output_dir: str = "extracted_data"):
     """
     Sukoon API extraction mode - main entry point.
     
@@ -40,6 +40,7 @@ async def login_sukoon_api(playwright: Playwright, referral_id=None):
     Args:
         playwright: Playwright instance
         referral_id: Optional referral ID (not used for API extraction)
+        output_dir: Base output directory for extracted files
         
     Returns:
         bool: True if extraction successful
@@ -71,9 +72,9 @@ async def login_sukoon_api(playwright: Playwright, referral_id=None):
         
         # =====================================================
         # Step 7: Save results to portal-specific folder
-        # Formatter creates: extracted_data/sukoon/sukoon_extracted_YYYYMMDD_HHMMSS.txt
+        # Formatter creates: {output_dir}/sukoon/sukoon_extracted_YYYYMMDD_HHMMSS.txt
         # =====================================================
-        formatter = SukoonFormatter()  # No path - uses portal-specific path
+        formatter = SukoonFormatter(output_dir=output_dir)
         output_path = formatter.write_records(records)
         
         # Also save as JSON for structured access
@@ -103,11 +104,11 @@ async def login_sukoon_api(playwright: Playwright, referral_id=None):
             await auth.close()
 
 
-async def run_sukoon_api_extraction(playwright: Playwright, referral_id=None):
+async def run_sukoon_api_extraction(playwright: Playwright, referral_id=None, output_dir: str = "extracted_data"):
     """
     Alias for login_sukoon_api for consistency with other portals.
     """
-    return await login_sukoon_api(playwright, referral_id)
+    return await login_sukoon_api(playwright, referral_id, output_dir=output_dir)
 
 
 # Allow running directly
