@@ -10,7 +10,7 @@ ADNIC_API_BASE_URL = "https://www.adnicinsure.com/Eng/Services/INeedAjaxServices
 
 # Portal information
 PORTAL_NAME = "ADNIC"
-PORTAL_REGION = "UAE"
+PORTAL_REGION = "Dubai"
 
 # =====================================================
 # Level 0: Independent APIs (no dependencies)
