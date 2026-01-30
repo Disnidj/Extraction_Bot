@@ -1,15 +1,22 @@
 """
 MaxHealth Benefits Formatter
-Converts JSON extraction results to formatted text file.
+Converts JSON extraction results to database-compatible format.
 
-Output Format matches ADNIC style:
-- Standalone fields first (no TPA/Network context)
-- Then TPA-specific Network options
-- Then for each TPA + Network combination, show Policy Holder Type
-- Then for each TPA + Network + Policy Holder Type, show Plans
+Output Format matches database schema:
+- One row per Selection_Value (flat structure)
+- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
-Each row maintains the "current state" (selected parent values) like ADNIC output:
-- Plans include "Policy Holder Type": "<selected value>" to show parent context
+Database Schema Reference:
+{
+    "CTN_ID": auto-generated,
+    "Broker_ID": 3,
+    "Company": "MaxHealth",
+    "TPA": "NAS",
+    "Network": "MAXMED - NAS",
+    "Region": "Dubai",
+    "Dropdown_Name": "Plan",
+    "Selection_Value": "MAXMED BRONZE GROUP_NAS"
+}
 
 Business Rules Applied:
 - Location locked to Dubai
@@ -23,18 +30,25 @@ from datetime import datetime
 from src.utils.logger import maxhealth_logger
 
 
+# Default Broker ID - can be configured
+DEFAULT_BROKER_ID = 3
+
+
 class MaxHealthFormatter:
-    """Formats MaxHealth extraction results to text format."""
+    """Formats MaxHealth extraction results to database-compatible format."""
     
-    def __init__(self, results: dict = None):
+    def __init__(self, results: dict = None, broker_id: int = DEFAULT_BROKER_ID):
         """
         Initialize formatter.
         
         Args:
             results: Extraction results dict (optional, can load from file)
+            broker_id: Broker ID for database records
         """
         self.results = results
+        self.broker_id = broker_id
         self.output_lines = []
+        self.company_name = "MaxHealth"
     
     def load_from_file(self, json_file_path: str):
         """
@@ -49,116 +63,88 @@ class MaxHealthFormatter:
     
     def format_to_text(self) -> list:
         """
-        Convert JSON results to text format matching ADNIC style.
+        Convert JSON results to database-compatible format.
         
-        Each row maintains the hierarchical state (selected parent values).
-        For Plans, includes which Policy Holder Type was selected.
+        Each row has full context: TPA, Network, Region all populated.
+        Output per TPA+Network+Region combination:
+        - Location, Quotation For, Policy Holder Type, Plan
         
         Returns:
-            list: List of formatted lines
+            list: List of formatted lines (one per Selection_Value)
         """
         if not self.results:
             raise ValueError("No results to format. Load or provide results first.")
         
         self.output_lines = []
-        portal = self.results.get("portal", "MaxHealth")
         lookups = self.results.get("lookups", {})
         plans_by_combo = self.results.get("plans_by_combination", {})
         
         # Region is always Dubai (filtered during extraction)
         region = "Dubai"
         
-        # Step 1: Standalone fields (no TPA/Network context)
-        # TPA dropdown
-        networks = lookups.get("networks", [])
-        if networks:
-            self._add_line(portal, "", region, "", "TPA", 
-                          [n.get("title") for n in networks if n.get("title")])
-        
-        # Location (filtered to Dubai only)
-        self._add_line(portal, "", region, "", "Location", ["Dubai"])
-        
-        # Quotation For (all options)
+        # Get Quotation For values (same for all combinations)
         client_statuses = lookups.get("clientStatuses", [])
-        if client_statuses:
-            self._add_line(portal, "", region, "", "Quotation For",
-                          [cs.get("title") for cs in client_statuses if cs.get("title")])
+        quotation_values = [cs.get("title") for cs in client_statuses if cs.get("title")] if client_statuses else []
         
-        # Step 2: For each TPA, show available Networks
-        # Group products by their network (TPA)
-        tpa_to_networks = {}
-        for combo_key, combo_data in plans_by_combo.items():
-            tpa_name = combo_data.get("network_name", "")
-            network_name = combo_data.get("product_name", "")
-            if tpa_name not in tpa_to_networks:
-                tpa_to_networks[tpa_name] = []
-            if network_name not in tpa_to_networks[tpa_name]:
-                tpa_to_networks[tpa_name].append(network_name)
-        
-        for tpa_name, network_list in tpa_to_networks.items():
-            self._add_line(portal, tpa_name, region, "", "Network", network_list)
-        
-        # Step 3: For each TPA + Network, show Policy Holder Type
+        # ===========================================
+        # Output per TPA+Network+Region (all context filled)
+        # ===========================================
         for combo_key, combo_data in plans_by_combo.items():
             tpa_name = combo_data.get("network_name", "")
             network_name = combo_data.get("product_name", "")
             valid_target_groups = combo_data.get("valid_target_groups", [])
             plans = combo_data.get("plans", [])
             
+            # Quotation For
+            if quotation_values:
+                self._add_rows(tpa_name, network_name, region, "Quotation For", quotation_values)
+            
             # Policy Holder Type for this combination
             if valid_target_groups:
                 target_group_names = [tg.get("name") for tg in valid_target_groups if tg.get("name")]
-                self._add_line(portal, tpa_name, region, network_name, "Policy Holder Type", target_group_names)
+                self._add_rows(tpa_name, network_name, region, "Policy Holder Type", target_group_names)
             
-            # Step 4: For each Policy Holder Type, show Plans with parent context
-            # This matches ADNIC format where each child row includes parent selection
-            if plans and valid_target_groups:
+            # Plans for this combination
+            if plans:
                 plan_values = [p.get("title") if isinstance(p, dict) else p for p in plans]
-                
-                for target_group in valid_target_groups:
-                    tg_name = target_group.get("name", "")
-                    if tg_name:
-                        # Add Plan row with Policy Holder Type context
-                        self._add_line(
-                            portal, tpa_name, region, network_name, "Plan", plan_values,
-                            extra_context={"Policy Holder Type": tg_name}
-                        )
+                self._add_rows(tpa_name, network_name, region, "Plan", plan_values)
         
         return self.output_lines
     
-    def _add_line(self, portal: str, tpa: str, region: str, network: str, 
-                  field_name: str, values: list, extra_context: dict = None):
+    def _add_rows(self, tpa: str, network: str, region: str, 
+                  dropdown_name: str, values: list):
         """
-        Add a formatted line to output.
+        Add formatted rows to output (one row per value).
+        
+        Database format:
+        {"Broker_ID": 3, "Company": "MaxHealth", "TPA": "NAS", "Network": "MAXMED", 
+         "Region": "Dubai", "Dropdown_Name": "Plan", "Selection_Value": "Bronze"}
         
         Args:
-            portal: Portal name
             tpa: TPA name (empty string if not applicable)
-            region: Region name (empty string if not applicable)
             network: Network name (empty string if not applicable)
-            field_name: Name of the dropdown field
+            region: Region name
+            dropdown_name: Name of the dropdown field
             values: List of option values
-            extra_context: Additional context fields to include (parent selections)
         """
         if not values:
             return
         
-        line_data = {
-            "data": {
-                "Portal": portal,
+        for value in values:
+            if not value:
+                continue
+                
+            row = {
+                "Broker_ID": self.broker_id,
+                "Company": self.company_name,
                 "TPA": tpa,
-                "Region": region,
                 "Network": network,
-                "field name": field_name,
-                "values": [v for v in values if v]
+                "Region": region,
+                "Dropdown_Name": dropdown_name,
+                "Selection_Value": value
             }
-        }
-        
-        # Add any extra context (like parent selection values)
-        if extra_context:
-            line_data["data"].update(extra_context)
-        
-        self.output_lines.append(json.dumps(line_data, ensure_ascii=False))
+            
+            self.output_lines.append(json.dumps(row, ensure_ascii=False))
     
     def save_to_file(self, output_dir: str = "extracted_data") -> str:
         """
@@ -202,4 +188,19 @@ class MaxHealthFormatter:
     
     def print_summary(self):
         """Print formatting summary."""
-        print(f"\n📊 Formatted {len(self.output_lines)} dropdown fields")
+        print(f"\n📊 Formatted {len(self.output_lines)} database rows")
+        
+        # Count by dropdown name
+        dropdown_counts = {}
+        for line in self.output_lines:
+            try:
+                data = json.loads(line)
+                dropdown = data.get("Dropdown_Name", "Unknown")
+                dropdown_counts[dropdown] = dropdown_counts.get(dropdown, 0) + 1
+            except:
+                pass
+        
+        if dropdown_counts:
+            print("   Breakdown by Dropdown:")
+            for dropdown, count in dropdown_counts.items():
+                print(f"     • {dropdown}: {count} rows")
