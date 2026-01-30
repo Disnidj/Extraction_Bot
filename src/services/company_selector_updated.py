@@ -169,25 +169,33 @@ def load_previous_selection():
 def filter_portal_list(portal_list, selected_companies):
     """
     Filter portal list based on selected companies.
+    PRESERVES the order in which user selected the companies.
     
     Args:
         portal_list: List of dicts with 'function' and 'name' keys
         selected_companies: List of company names selected by user
     
     Returns:
-        Filtered list of portal dicts
+        Filtered list of portal dicts in user's selection order
     """
     if not selected_companies:
         return portal_list
     
-    # Convert company names to portal function names
+    # Convert company names to portal function names (preserving order)
     selected_portal_names = []
     for company in selected_companies:
         portal_name = COMPANY_TO_FUNCTION_MAPPING.get(company, company)
         selected_portal_names.append(portal_name)
     
-    # Filter portals
-    filtered = [p for p in portal_list if p["name"] in selected_portal_names]
+    # Create a lookup dict for quick portal access
+    portal_lookup = {p["name"]: p for p in portal_list}
+    
+    # Build filtered list IN THE ORDER user selected (not portal_list order)
+    filtered = []
+    for portal_name in selected_portal_names:
+        if portal_name in portal_lookup:
+            filtered.append(portal_lookup[portal_name])
+    
     return filtered
 
 

@@ -63,12 +63,13 @@ async def login_and_get_token(playwright: Playwright):
         await browser.close()
 
 
-async def run_qatar_api_extraction(playwright: Playwright):
+async def run_qatar_api_extraction(playwright: Playwright, output_dir: str = "extracted_data"):
     """
     Main function to run Qatar API-based extraction.
     
     Args:
         playwright: Playwright instance
+        output_dir: Base output directory for extracted files
         
     Returns:
         dict: Extraction results or None on failure
@@ -93,7 +94,7 @@ async def run_qatar_api_extraction(playwright: Playwright):
     results = await extractor.extract_all_benefits()
     
     # Step 3: Save JSON results
-    json_file = extractor.save_results()
+    json_file = extractor.save_results(output_dir=output_dir)
     
     # Step 4: Print extraction summary
     extractor.print_summary()
@@ -104,7 +105,7 @@ async def run_qatar_api_extraction(playwright: Playwright):
     print("=" * 60)
     
     formatter = QatarFormatter(results)
-    text_file = formatter.format_and_save()
+    text_file = formatter.format_and_save(output_dir=output_dir)
     formatter.print_summary()
     
     print("\n" + "=" * 60)

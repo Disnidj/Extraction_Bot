@@ -1,4 +1,5 @@
 import asyncio
+import os
 from playwright.async_api import async_playwright
 import subprocess
 from datetime import datetime
@@ -228,13 +229,21 @@ async def run_api_extraction_mode(playwright, selected_companies):
     api_portals = API_PORTAL_GROUPS["api_portals"]
     api_portal_names = [p["name"] for p in api_portals]
     
-    # Map selected companies to portal names
+    # Map selected companies to portal names (preserving order)
     from src.services.company_selector_updated import COMPANY_TO_FUNCTION_MAPPING
     selected_portal_names = [COMPANY_TO_FUNCTION_MAPPING.get(c, c) for c in selected_companies]
     
-    # Find matching API portals
-    matching_portals = [p for p in api_portals if p["name"] in selected_portal_names]
-    unavailable = [n for n in selected_portal_names if n not in api_portal_names]
+    # Create lookup for API portals
+    api_portal_lookup = {p["name"]: p for p in api_portals}
+    
+    # Find matching API portals IN USER'S SELECTION ORDER
+    matching_portals = []
+    unavailable = []
+    for portal_name in selected_portal_names:
+        if portal_name in api_portal_lookup:
+            matching_portals.append(api_portal_lookup[portal_name])
+        else:
+            unavailable.append(portal_name)
     
     if unavailable:
         print(f"\n⚠️  No API extraction implemented yet for: {', '.join(unavailable)}")
@@ -255,15 +264,19 @@ async def run_api_extraction_mode(playwright, selected_companies):
     
     # Record overall start time
     overall_start_time = datetime.now()
+    
+    # Create run-specific output folder with timestamp
+    run_timestamp = overall_start_time.strftime("%Y%m%d_%H%M%S")
+    run_output_dir = os.path.join("extracted_data", run_timestamp)
+    os.makedirs(run_output_dir, exist_ok=True)
+    print(f"\n📁 Output folder: {run_output_dir}")
+    
     main_execution_logger.info(f"\n{'='*70}")
     main_execution_logger.info(f"🚀 API EXTRACTION FLOW STARTED")
     main_execution_logger.info(f"Start Time: {overall_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    main_execution_logger.info(f"Output Folder: {run_output_dir}")
     main_execution_logger.info(f"Portals to process: {', '.join([p['name'] for p in matching_portals])}")
     main_execution_logger.info(f"{'='*70}")
-    
-    # Note: Each portal creates its own output folder and file
-    # e.g., extracted_data/adnic/adnic_extracted_20260128_132144.txt
-    #       extracted_data/takaful/takaful_extracted_20260128_133022.txt
     
     portal_timings = {}
     
@@ -278,7 +291,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
         main_execution_logger.info(f"🚀 Portal '{portal['name']}' - Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
         
         try:
-            success = await portal["function"](playwright)
+            success = await portal["function"](playwright, output_dir=run_output_dir)
             portal_end = datetime.now()
             portal_duration = portal_end - portal_start
             portal_timings[portal['name']]['end'] = portal_end
