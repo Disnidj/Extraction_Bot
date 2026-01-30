@@ -93,7 +93,7 @@ class SukoonAuth:
         
         try:
             await self.page.wait_for_load_state('networkidle')
-            await asyncio.sleep(2)
+            await asyncio.sleep(0.5)
             
             # Check if already on the company form or later stage
             if "GenerateQuotes" in self.page.url:
@@ -102,11 +102,11 @@ class SukoonAuth:
             
             # Click CREATE button
             create_btn = self.page.get_by_role("link", name="CREATE", exact=True)
-            if await create_btn.is_visible(timeout=5000):
+            if await create_btn.is_visible(timeout=3000):
                 await create_btn.click()
                 sukoon_logger.debug("Clicked on Create Button")
                 await self.page.wait_for_load_state('networkidle')
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
             
             print("   ✓ New quote started")
             print(f"   Current URL: {self.page.url}")
@@ -132,58 +132,50 @@ class SukoonAuth:
         
         try:
             await self.page.wait_for_load_state('networkidle')
-            await asyncio.sleep(2)
+            await asyncio.sleep(0.5)
             
-            # Fill Company Name
+            # Fill Company Name quickly
             company_name_field = self.page.locator("#ContentPlaceHolder1_txtCompanyName")
-            if await company_name_field.is_visible(timeout=5000):
+            if await company_name_field.is_visible(timeout=3000):
                 await company_name_field.fill("API Extraction Test Company")
                 print("   ✓ Company name filled")
-                await asyncio.sleep(1)
             else:
                 print("   ⚠️ Company name field not visible - may already be filled")
             
             # Nature of Business - custom dropdown
             try:
                 await self.page.locator("#ContentPlaceHolder1_divNatureOfBusiness").get_by_text("Please Select").first.click()
-                await asyncio.sleep(1)
                 await self.page.locator("//span[text()='Retail Sales']").click()
                 print("   ✓ Business nature: Retail Sales")
-                await asyncio.sleep(1)
             except Exception as e:
                 print(f"   ⚠️ Business nature already set or error: {str(e)[:40]}")
             
             # Region - custom dropdown
             try:
                 await self.page.locator("#ContentPlaceHolder1_divRegion").get_by_text("Please Select").first.click()
-                await asyncio.sleep(1)
                 await self.page.locator(f"//span[text()='{region}']").click()
                 print(f"   ✓ Region: {region}")
-                await asyncio.sleep(1)
             except Exception as e:
                 print(f"   ⚠️ Region already set or error: {str(e)[:40]}")
             
             # Plan Options - custom dropdown (use link role like process_page.py)
             try:
                 await self.page.locator("#ContentPlaceHolder1_divProduct").get_by_text("Please Select").first.click()
-                await asyncio.sleep(1)
                 await self.page.get_by_role("link", name="SME Medical Healthcare").click()
                 print("   ✓ Plan: SME Medical Healthcare")
-                await asyncio.sleep(1)
             except Exception as e:
                 print(f"   ⚠️ Plan already set or error: {str(e)[:40]}")
             
             # Is Previous Insured - use nth(4) like process_page.py
             try:
                 await self.page.locator("#ContentPlaceHolder1_divVirgin").get_by_text("Please Select").first.click()
-                await asyncio.sleep(1)
                 await self.page.get_by_role("link", name="No", exact=True).nth(4).click()
                 print("   ✓ Previous insured: No")
-                await asyncio.sleep(1)
             except Exception as e:
                 print(f"   ⚠️ Previous insured already set or error: {str(e)[:40]}")
             
-            await asyncio.sleep(2)
+            # Short pause for stability
+            await asyncio.sleep(0.5)
             print("   ✓ Company form completed!")
             return True
             
@@ -204,7 +196,7 @@ class SukoonAuth:
         
         try:
             await self.page.wait_for_load_state('networkidle')
-            await asyncio.sleep(2)
+            await asyncio.sleep(0.5)
             
             # Look for census file
             census_path = os.path.join(SUKOON_GENERATED_CENSUS_DIR, "sukoon_census.xlsx")
@@ -218,18 +210,18 @@ class SukoonAuth:
             
             # Upload file using exact selector from process_page.py
             file_input = self.page.locator("#ContentPlaceHolder1_uploadFile")
-            if await file_input.is_visible(timeout=5000):
+            if await file_input.is_visible(timeout=3000):
                 await file_input.set_input_files(census_path)
                 print("   ✓ File selected")
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
                 
                 # Click Upload button
                 upload_btn = self.page.get_by_role("button", name="Upload")
-                if await upload_btn.is_visible(timeout=3000):
+                if await upload_btn.is_visible(timeout=2000):
                     await upload_btn.click()
                     print("   ✓ Upload button clicked")
-                    await self.page.wait_for_load_state('networkidle')
-                    await asyncio.sleep(5)
+                    await self.page.wait_for_load_state('networkidle', timeout=60000)
+                    await asyncio.sleep(1)
             else:
                 print("   ⚠️ File upload field not visible")
             
@@ -249,7 +241,7 @@ class SukoonAuth:
         
         try:
             await self.page.wait_for_load_state('networkidle')
-            await asyncio.sleep(2)
+            await asyncio.sleep(0.5)
             
             current_url = self.page.url
             print(f"   Current URL: {current_url}")
@@ -261,10 +253,10 @@ class SukoonAuth:
             # Try clicking NEXT/Continue button to proceed
             try:
                 next_btn = self.page.locator('//input[contains(@value, "Next")]').first
-                if await next_btn.is_visible(timeout=3000):
+                if await next_btn.is_visible(timeout=1000):
                     await next_btn.click()
                     await self.page.wait_for_load_state('networkidle')
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(0.5)
                     print("   ✓ Clicked Next")
             except:
                 pass
@@ -281,7 +273,7 @@ class SukoonAuth:
                     wait_until="networkidle",
                     timeout=30000
                 )
-                await asyncio.sleep(3)
+                await asyncio.sleep(0.5)
                 
                 if "GenerateQuotes" in self.page.url:
                     print("   ✓ Direct navigation to GenerateQuotes successful!")
