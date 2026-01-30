@@ -69,17 +69,20 @@ class SukoonApiClient:
         self,
         indemnity_id: str,
         region_name: str = "Dubai",
-        product_id: int = 1
+        product_id: int = 1,
+        network_id: str = ""
     ) -> Dict[str, List[DropdownOption]]:
         """
         Call the PopulateDDL Mega API.
         
         This single call returns ALL dropdown options for the given indemnityId.
+        Optionally pass networkId to test if options change per network.
         
         Args:
             indemnity_id: The "master switch" - determines all sub-options
             region_name: Region context (Dubai, Abu Dhabi, etc.)
             product_id: Product type (1 = SME Health)
+            network_id: Optional network ID to test network-specific options
             
         Returns:
             Dict mapping field names to lists of DropdownOption
@@ -89,6 +92,10 @@ class SukoonApiClient:
             "regionName": region_name,
             "productId": product_id
         }
+        
+        # Add networkId if provided (experimental - testing if API accepts it)
+        if network_id:
+            payload["networkId"] = str(network_id)
         
         self.call_count += 1
         
