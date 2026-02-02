@@ -30,6 +30,7 @@ from src.pages.takaful.takafulmain_api import run_takaful_api_extraction
 from src.pages.qatar.qatar_main_api import run_qatar_api_extraction
 from src.pages.sukoon.sukoonmain_api import run_sukoon_api_extraction
 from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
+from src.services.db_service.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
@@ -347,6 +348,20 @@ async def run_api_extraction_mode(playwright, selected_companies):
                 f"{timing['start'].strftime('%H:%M:%S')} → {timing['end'].strftime('%H:%M:%S')}"
             )
     main_execution_logger.info(f"{'='*70}\n")
+
+    # Upload extracted data to database
+    print("\n" + "=" * 70)
+    print("📤 DATABASE UPLOAD")
+    print("=" * 70)
+    
+    success, rows_inserted, upload_msg = upload_to_database(run_output_dir)
+    
+    if success:
+        print(f"✅ Database upload complete: {rows_inserted} rows inserted")
+        main_execution_logger.info(f"Database upload: SUCCESS - {rows_inserted} rows inserted")
+    else:
+        print(f"❌ Database upload failed: {upload_msg}")
+        main_execution_logger.error(f"Database upload: FAILED - {upload_msg}")
 
     
 if __name__ == "__main__":

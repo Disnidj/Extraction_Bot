@@ -1,7 +1,10 @@
 """
 Takaful Benefits Formatter
-Converts JSON extraction results to formatted text file.
-Each line contains one dropdown field with its values.
+Converts JSON extraction results to database-compatible format.
+
+Output Format matches database schema:
+- One row per Selection_Value (flat structure)
+- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 """
 
 import json
@@ -10,18 +13,25 @@ from datetime import datetime
 from src.utils.logger import takaful_logger
 
 
+# Default Broker ID - can be configured
+DEFAULT_BROKER_ID = 3
+
+
 class TakafulFormatter:
-    """Formats Takaful benefits JSON to text format."""
+    """Formats Takaful benefits JSON to database-compatible format."""
     
-    def __init__(self, results: dict = None):
+    def __init__(self, results: dict = None, broker_id: int = DEFAULT_BROKER_ID):
         """
         Initialize formatter.
         
         Args:
             results: Extraction results dict (optional, can load from file)
+            broker_id: Broker ID for database records
         """
         self.results = results
+        self.broker_id = broker_id
         self.output_lines = []
+        self.company_name = "Takaful"
     
     def load_from_file(self, json_file_path: str):
         """
@@ -36,25 +46,23 @@ class TakafulFormatter:
     
     def format_to_text(self) -> list:
         """
-        Convert JSON results to text format.
+        Convert JSON results to database-compatible format.
         Each line is a JSON object with:
-        - Portal, TPA, Region, Network (plan), field_name, values
+        - Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
         
         Returns:
-            list: List of formatted lines
+            list: List of formatted lines (one per Selection_Value)
         """
         if not self.results:
             raise ValueError("No results to format. Load or provide results first.")
         
         self.output_lines = []
-        portal = self.results.get("portal", "TAKAFUL EMARAT")
         
         # Iterate through the hierarchy: emirates -> tpas -> plans -> benefits
         for emirate_name, emirate_data in self.results.get("emirates", {}).items():
             for tpa_name, tpa_data in emirate_data.get("tpas", {}).items():
                 for plan_name, plan_data in tpa_data.get("plans", {}).items():
                     self._process_plan_benefits(
-                        portal=portal,
                         region=emirate_name,
                         tpa=tpa_name,
                         network=plan_name,
@@ -63,13 +71,12 @@ class TakafulFormatter:
         
         return self.output_lines
     
-    def _process_plan_benefits(self, portal: str, region: str, tpa: str, 
+    def _process_plan_benefits(self, region: str, tpa: str, 
                                 network: str, benefits: dict):
         """
         Process all benefits for a single plan and add to output lines.
         
         Args:
-            portal: Portal name
             region: Region/Emirate name
             tpa: TPA name
             network: Plan/Network name
@@ -110,20 +117,44 @@ class TakafulFormatter:
             else:
                 processed_fields[field_key] = values
         
-        # Output each unique field as a line
+        # Output each unique field - one row per value (database format)
         for field_name, values in processed_fields.items():
-            # Order: Portal, Region, Network (Plan), TPA, field_name, values
-            line_data = {
-                "data": {
-                    "Portal": portal,
-                    "Region": region,
-                    "TPA": tpa,
-                    "Network": network,
-                    "field_name": field_name,
-                    "values": values
-                }
+            self._add_rows(tpa, network, region, field_name, values)
+    
+    def _add_rows(self, tpa: str, network: str, region: str,
+                  dropdown_name: str, values: list):
+        """
+        Add formatted rows to output (one row per value).
+        
+        Database format:
+        {"Broker_ID": 3, "Company": "Takaful", "TPA": "...", "Network": "...",
+         "Region": "...", "Dropdown_Name": "...", "Selection_Value": "..."}
+        
+        Args:
+            tpa: TPA name
+            network: Network name
+            region: Region name
+            dropdown_name: Name of the dropdown field
+            values: List of option values
+        """
+        if not values:
+            return
+        
+        for value in values:
+            if not value:
+                continue
+            
+            row = {
+                "Broker_ID": self.broker_id,
+                "Company": self.company_name,
+                "TPA": tpa,
+                "Network": network,
+                "Region": region,
+                "Dropdown_Name": dropdown_name,
+                "Selection_Value": value
             }
-            self.output_lines.append(json.dumps(line_data, ensure_ascii=False))
+            
+            self.output_lines.append(json.dumps(row, ensure_ascii=False))
     
     def save_to_file(self, output_dir: str = "extracted_data") -> str:
         """
@@ -169,17 +200,20 @@ class TakafulFormatter:
     def print_summary(self):
         """Print formatting summary."""
         print(f"\n📊 FORMATTING SUMMARY")
-        print(f"   Total dropdown fields: {len(self.output_lines)}")
+        print(f"   Total database rows: {len(self.output_lines)}")
         
-        # Count by TPA
-        tpa_counts = {}
+        # Count by dropdown name
+        dropdown_counts = {}
         for line in self.output_lines:
-            data = json.loads(line)
-            tpa = data["data"]["TPA"]
-            tpa_counts[tpa] = tpa_counts.get(tpa, 0) + 1
+            try:
+                data = json.loads(line)
+                dropdown = data.get("Dropdown_Name", "Unknown")
+                dropdown_counts[dropdown] = dropdown_counts.get(dropdown, 0) + 1
+            except:
+                pass
         
-        for tpa, count in sorted(tpa_counts.items()):
-            print(f"   {tpa}: {count} fields")
+        for dropdown, count in sorted(dropdown_counts.items()):
+            print(f"   {dropdown}: {count} values")
 
 
 def format_json_file(json_file_path: str, output_dir: str = "extracted_data") -> str:
