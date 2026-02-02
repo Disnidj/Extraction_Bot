@@ -1,6 +1,10 @@
 """
 Upload Extracted Portal Data to Database
 Handles batch upload with transaction support - delete old, insert new, rollback on error.
+
+Includes dropdown name mapping from Medical_CTN_Portal_Field_Mapping table:
+- Looks up portal-specific dropdown names (e.g., "Quotation For" from MaxHealth column)
+- Maps to standard dropdown names (e.g., "Quotation_For" from Dropdown_Name column)
 """
 
 import json
@@ -10,8 +14,9 @@ from src.services.db_config.db_connect import MySQLDatabase
 from src.services.db_config.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
 
 
-# Table name for portal dropdowns
+# Table names
 TABLE_NAME = "Medical_CTN_Cascading_Dropdown_Lifecare"
+MAPPING_TABLE = "Medical_CTN_Portal_Field_Mapping"
 
 # Batch size for inserts
 BATCH_SIZE = 100
@@ -20,6 +25,78 @@ BATCH_SIZE = 100
 def get_db_connection() -> MySQLDatabase:
     """Create and return a database connection."""
     return MySQLDatabase(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASSWORD)
+
+
+def load_dropdown_mappings(db, company: str) -> Dict[str, str]:
+    """
+    Load dropdown name mappings from Medical_CTN_Portal_Field_Mapping.
+    
+    Maps portal-specific dropdown names to standard database names.
+    Example: "Quotation For" (MaxHealth) -> "Quotation_For" (standard)
+    
+    Args:
+        db: Database connection
+        company: Company/portal name (column name in mapping table)
+        
+    Returns:
+        Dict mapping {portal_dropdown_name: standard_dropdown_name}
+    """
+    mappings = {}
+    
+    try:
+        # Query to get mappings for this company
+        # Column name is the company name (e.g., MaxHealth, Sukoon, Qatar)
+        query = f"""
+            SELECT `{company}`, Dropdown_Name 
+            FROM {MAPPING_TABLE}
+            WHERE `{company}` IS NOT NULL AND `{company}` != ''
+        """
+        rows = db.fetch_all(query)
+        
+        if rows:
+            for row in rows:
+                portal_name = row.get(company, "")
+                standard_name = row.get("Dropdown_Name", "")
+                if portal_name and standard_name:
+                    mappings[portal_name] = standard_name
+                    
+        print(f"   Loaded {len(mappings)} dropdown mappings for {company}")
+        
+    except Exception as e:
+        print(f"   ⚠️ Could not load mappings for {company}: {e}")
+        print(f"   → Will use original dropdown names")
+    
+    return mappings
+
+
+def apply_dropdown_mapping(records: List[Dict], mappings: Dict[str, str]) -> Tuple[int, int]:
+    """
+    Apply dropdown name mappings to records.
+    
+    Args:
+        records: List of record dictionaries
+        mappings: Dict mapping {portal_dropdown_name: standard_dropdown_name}
+        
+    Returns:
+        Tuple of (mapped_count, unmapped_count)
+    """
+    mapped_count = 0
+    unmapped_count = 0
+    unmapped_names = set()
+    
+    for record in records:
+        original_name = record.get("Dropdown_Name", "")
+        if original_name in mappings:
+            record["Dropdown_Name"] = mappings[original_name]
+            mapped_count += 1
+        else:
+            unmapped_count += 1
+            unmapped_names.add(original_name)
+    
+    if unmapped_names:
+        print(f"   ⚠️ Unmapped dropdown names: {', '.join(unmapped_names)}")
+    
+    return mapped_count, unmapped_count
 
 
 def parse_extracted_file(file_path: str) -> List[Dict]:
@@ -60,9 +137,11 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     Process:
     1. Collect all extracted files
     2. Parse all records  
-    3. Delete old data for affected companies (in transaction)
-    4. Insert new data in batches (in transaction)
-    5. Commit on success, rollback on any error
+    3. Load dropdown name mappings for each company
+    4. Apply mappings to convert portal names to standard names
+    5. Delete old data for affected companies (in transaction)
+    6. Insert new data in batches (in transaction)
+    7. Commit on success, rollback on any error
     
     Args:
         output_dir: Base output directory containing portal subdirectories
@@ -86,22 +165,24 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     for portal, filepath in extracted_files:
         print(f"   • {portal}: {os.path.basename(filepath)}")
     
-    # Parse all records
+    # Parse all records and group by company
     print("\n📖 Parsing extracted data...")
-    all_records = []
-    companies_found = set()
+    records_by_company = {}  # {company: [records]}
     
     for portal_name, file_path in extracted_files:
         records = parse_extracted_file(file_path)
-        all_records.extend(records)
         for record in records:
-            if record.get("Company"):
-                companies_found.add(record["Company"])
+            company = record.get("Company", "")
+            if company:
+                if company not in records_by_company:
+                    records_by_company[company] = []
+                records_by_company[company].append(record)
     
-    print(f"   Total records: {len(all_records)}")
-    print(f"   Companies: {', '.join(companies_found)}")
+    total_records = sum(len(recs) for recs in records_by_company.values())
+    print(f"   Total records: {total_records}")
+    print(f"   Companies: {', '.join(records_by_company.keys())}")
     
-    if not all_records:
+    if not records_by_company:
         return False, 0, "No valid records found"
     
     # Connect to database
@@ -111,11 +192,37 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         return False, 0, "Failed to connect to database"
     
     try:
+        # Load and apply dropdown mappings for each company
+        print("\n🔄 Loading dropdown name mappings...")
+        all_records = []
+        
+        # Dropdown names to skip (hierarchy fields, not actual dropdown values)
+        SKIP_DROPDOWN_NAMES = {"TPA", "Network", ""}
+        
+        for company, records in records_by_company.items():
+            mappings = load_dropdown_mappings(db, company)
+            if mappings:
+                mapped, unmapped = apply_dropdown_mapping(records, mappings)
+                print(f"   {company}: {mapped} mapped, {unmapped} unmapped")
+            else:
+                print(f"   {company}: No mappings found, using original names")
+            
+            # Filter out TPA, Network, and empty Dropdown_Name rows
+            filtered_records = [
+                r for r in records 
+                if r.get("Dropdown_Name", "") not in SKIP_DROPDOWN_NAMES
+            ]
+            skipped = len(records) - len(filtered_records)
+            if skipped > 0:
+                print(f"   {company}: Skipped {skipped} hierarchy rows (TPA/Network/empty)")
+            
+            all_records.extend(filtered_records)
+        
         db.connection.autocommit = False  # Start transaction
         
         # Delete old data for affected companies only
-        print(f"\n🗑️ Deleting old data for: {', '.join(companies_found)}")
-        for company in companies_found:
+        print(f"\n🗑️ Deleting old data for: {', '.join(records_by_company.keys())}")
+        for company in records_by_company.keys():
             db.cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE Company = %s", (company,))
             print(f"   • {company}: {db.cursor.rowcount} rows deleted")
         
@@ -171,7 +278,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
 
 def upload_single_file(file_path: str) -> Tuple[bool, int, str]:
     """
-    Upload a single extracted file to database.
+    Upload a single extracted file to database with dropdown mapping.
     
     Args:
         file_path: Path to the extracted .txt file
@@ -202,6 +309,15 @@ def upload_single_file(file_path: str) -> Tuple[bool, int, str]:
         return False, 0, "Failed to connect to database"
     
     try:
+        # Load and apply dropdown mappings
+        print("\n🔄 Loading dropdown name mappings...")
+        mappings = load_dropdown_mappings(db, company)
+        if mappings:
+            mapped, unmapped = apply_dropdown_mapping(records, mappings)
+            print(f"   Mapped: {mapped}, Unmapped: {unmapped}")
+        else:
+            print(f"   No mappings found, using original names")
+        
         db.connection.autocommit = False
         
         # Delete old data for this company only

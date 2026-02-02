@@ -1,8 +1,12 @@
 """
 ADNIC Formatter
 
-Converts extraction results to text format.
+Converts extraction results to database-compatible format.
 Writes records to portal-specific folder: extracted_data/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
+
+Output Format matches database schema:
+- One row per Selection_Value (flat structure)
+- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 """
 
 import json
@@ -13,28 +17,36 @@ from datetime import datetime
 # Portal name for this formatter
 PORTAL_NAME = "adnic"
 
+# Default Broker ID - can be configured
+DEFAULT_BROKER_ID = 3
+
 
 class ADNICFormatter:
     """
     Formats ADNIC extraction results and writes to file.
     
-    Output format matches the standard extraction format:
-    {"data": {"Portal": "...", "TPA": "...", "Network": "...", "field name": "...", "values": [...]}}
+    Output format matches database schema:
+    {"Broker_ID": 3, "Company": "ADNIC", "TPA": "...", "Network": "...", 
+     "Region": "...", "Dropdown_Name": "...", "Selection_Value": "..."}
     
     Files are saved to: {output_dir}/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
     """
     
-    def __init__(self, output_path: str = None, output_dir: str = "extracted_data"):
+    def __init__(self, output_path: str = None, output_dir: str = "extracted_data",
+                 broker_id: int = DEFAULT_BROKER_ID):
         """
         Initialize formatter with output path.
         
         Args:
             output_path: Path to output file. If None, generates portal-specific path.
             output_dir: Base output directory for extracted files.
+            broker_id: Broker ID for database records.
         """
         self.portal_name = PORTAL_NAME
+        self.company_name = "ADNIC"
         self.output_path = output_path
         self.output_dir = output_dir
+        self.broker_id = broker_id
         self.records_written = 0
         
         # If no path provided, create portal-specific path
@@ -62,24 +74,63 @@ class ADNICFormatter:
         
         return os.path.join(folder, filename)
     
-    def format_record(self, record: Dict) -> str:
+    def format_record(self, record: Dict) -> List[str]:
         """
-        Format a single record as JSON string.
+        Format a single record as database rows (one per value).
+        
+        Converts old format:
+        {"data": {"Portal": "...", "field_name": "...", "values": [...]}}
+        
+        To database format (one row per value):
+        {"Broker_ID": 3, "Company": "ADNIC", ..., "Selection_Value": "..."}
         
         Args:
-            record: Record dict to format
+            record: Record dict to format (can be old or new format)
             
         Returns:
-            JSON string representation
+            List of JSON strings (one per value)
         """
-        return json.dumps(record, ensure_ascii=False)
+        rows = []
+        
+        # Handle old format with "data" wrapper
+        if "data" in record:
+            data = record["data"]
+            tpa = data.get("TPA", "")
+            network = data.get("Network", "")
+            region = data.get("Region", "")
+            # Check for various field name formats: "field name", "field_name", "Dropdown_Name"
+            dropdown_name = data.get("field name", data.get("field_name", data.get("Dropdown_Name", "")))
+            values = data.get("values", [])
+            
+            for value in values:
+                if not value:
+                    continue
+                row = {
+                    "Broker_ID": self.broker_id,
+                    "Company": self.company_name,
+                    "TPA": tpa,
+                    "Network": network,
+                    "Region": region,
+                    "Dropdown_Name": dropdown_name,
+                    "Selection_Value": value
+                }
+                rows.append(json.dumps(row, ensure_ascii=False))
+        
+        # Handle new database format (already flat)
+        elif "Selection_Value" in record:
+            # Ensure broker_id and company are set
+            record.setdefault("Broker_ID", self.broker_id)
+            record.setdefault("Company", self.company_name)
+            rows.append(json.dumps(record, ensure_ascii=False))
+        
+        return rows
     
     def write_records(self, records: List[Dict]) -> str:
         """
-        Write all records to file.
+        Write all records to file in database format.
         
         Args:
-            records: List of record dicts
+            records: List of record dicts (old or new format)
             
         Returns:
             Path to output file
@@ -87,12 +138,16 @@ class ADNICFormatter:
         # Ensure directory exists
         os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
         
-        with open(self.output_path, 'w', encoding='utf-8') as f:
-            for record in records:
-                f.write(self.format_record(record) + "\n")
+        all_rows = []
+        for record in records:
+            all_rows.extend(self.format_record(record))
         
-        self.records_written = len(records)
-        print(f"\n💾 Saved {self.records_written} records to: {self.output_path}")
+        with open(self.output_path, 'w', encoding='utf-8') as f:
+            for row in all_rows:
+                f.write(row + "\n")
+        
+        self.records_written = len(all_rows)
+        print(f"\n💾 Saved {self.records_written} database rows to: {self.output_path}")
         
         return self.output_path
     
@@ -133,7 +188,7 @@ class ADNICFormatter:
         }
 
 
-def format_and_save(records: List[Dict], output_path: str) -> str:
+def format_and_save(records: List[Dict], output_path: str = None) -> str:
     """
     Convenience function to format and save records.
     
