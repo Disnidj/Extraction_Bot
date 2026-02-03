@@ -25,6 +25,12 @@ PORTAL_NAME = "adnic"
 # Default Broker ID - can be configured
 DEFAULT_BROKER_ID = 3
 
+# ADNIC dropdown name mappings - maps ADNIC-specific names to standard database dropdown names
+ADNIC_DROPDOWN_NAMES = {
+    "Territorial Cover - Emergency": "Terotory",
+    "Territorial Cover - Elective": "Terotory",
+}
+
 
 class ADNICFormatter:
     """
@@ -105,6 +111,10 @@ class ADNICFormatter:
             region = data.get("Region", "")
             # Check for various field name formats: "field name", "field_name", "Dropdown_Name"
             dropdown_name = data.get("field name", data.get("field_name", data.get("Dropdown_Name", "")))
+            
+            # Apply ADNIC-specific dropdown name mapping
+            dropdown_name = ADNIC_DROPDOWN_NAMES.get(dropdown_name, dropdown_name)
+            
             values = data.get("values", [])
             
             for value in values:
@@ -123,6 +133,13 @@ class ADNICFormatter:
         
         # Handle new database format (already flat)
         elif "Selection_Value" in record:
+            # Apply ADNIC-specific dropdown name mapping if Dropdown_Name exists
+            if "Dropdown_Name" in record:
+                record["Dropdown_Name"] = ADNIC_DROPDOWN_NAMES.get(
+                    record["Dropdown_Name"], 
+                    record["Dropdown_Name"]
+                )
+            
             # Ensure broker_id and company are set
             record.setdefault("Broker_ID", self.broker_id)
             record.setdefault("Company", self.company_name)
