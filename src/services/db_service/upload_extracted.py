@@ -5,10 +5,13 @@ Handles batch upload with transaction support - delete old, insert new, rollback
 Includes dropdown name mapping from Medical_CTN_Portal_Field_Mapping table:
 - Looks up portal-specific dropdown names (e.g., "Quotation For" from MaxHealth column)
 - Maps to standard dropdown names (e.g., "Quotation_For" from Dropdown_Name column)
+
+Note: TPA/Network expansion is done in the formatters when writing the txt file.
 """
 
 import json
 import os
+import time
 from typing import List, Dict, Tuple
 from src.services.db_config.db_connect import MySQLDatabase
 from src.services.db_config.config import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
@@ -20,6 +23,30 @@ MAPPING_TABLE = "Medical_CTN_Portal_Field_Mapping"
 
 # Batch size for inserts
 BATCH_SIZE = 100
+
+# Company name standardization mapping
+# Maps formatter names to standard database names
+COMPANY_NAME_MAPPING = {
+    "Sukoon": "SUKOON INSURANCE",
+    "Qatar": "QATAR INSURANCE CO",
+    "Takaful": "TAKAFUL EMARAT",
+    "ADNIC": "ADNIC",
+    "MaxHealth": "MaxHealth",
+    # Add other portals as needed
+}
+
+
+def standardize_company_name(company: str) -> str:
+    """
+    Standardize company name to match database naming convention.
+    
+    Args:
+        company: Company name from extracted file
+        
+    Returns:
+        Standardized company name
+    """
+    return COMPANY_NAME_MAPPING.get(company, company)
 
 
 def get_db_connection() -> MySQLDatabase:
@@ -149,11 +176,14 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     Returns:
         Tuple of (success: bool, rows_inserted: int, message: str)
     """
-    print("\n" + "=" * 60)
-    print("📤 UPLOADING TO DATABASE")
-    print("=" * 60)
+    upload_start_time = time.time()
+    
+    print("\n" + "=" * 70)
+    print("📤 DATABASE UPLOAD STARTED")
+    print("=" * 70)
     print(f"   Database: {DB_NAME}")
     print(f"   Table: {TABLE_NAME}")
+    print(f"   Start Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     # Collect files
     print("\n📁 Collecting extracted files...")
@@ -168,15 +198,24 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     # Parse all records and group by company
     print("\n📖 Parsing extracted data...")
     records_by_company = {}  # {company: [records]}
+    all_dropdown_names_by_company = {}  # Track unique dropdown names per company
     
     for portal_name, file_path in extracted_files:
         records = parse_extracted_file(file_path)
         for record in records:
             company = record.get("Company", "")
             if company:
-                if company not in records_by_company:
-                    records_by_company[company] = []
-                records_by_company[company].append(record)
+                # Standardize company name to match database naming convention
+                standardized_company = standardize_company_name(company)
+                record["Company"] = standardized_company  # Update record with standardized name
+                
+                if standardized_company not in records_by_company:
+                    records_by_company[standardized_company] = []
+                    all_dropdown_names_by_company[standardized_company] = set()
+                records_by_company[standardized_company].append(record)
+                dropdown_name = record.get("Dropdown_Name", "")
+                if dropdown_name:
+                    all_dropdown_names_by_company[standardized_company].add(dropdown_name)
     
     total_records = sum(len(recs) for recs in records_by_company.values())
     print(f"   Total records: {total_records}")
@@ -193,38 +232,66 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     
     try:
         # Load and apply dropdown mappings for each company
-        print("\n🔄 Loading dropdown name mappings...")
+        print("\n" + "-" * 70)
+        print("🔄 DROPDOWN MAPPING SUMMARY")
+        print("-" * 70)
         all_records = []
+        total_mapped = 0
+        total_unmapped = 0
+        all_unmapped_names = set()
         
-        # Dropdown names to skip (hierarchy fields, not actual dropdown values)
-        SKIP_DROPDOWN_NAMES = {"TPA", "Network", ""}
+        # Dropdown names to skip (hierarchy fields and unwanted fields)
+        SKIP_DROPDOWN_NAMES = {"", "TPA", "Network"}
         
         for company, records in records_by_company.items():
-            mappings = load_dropdown_mappings(db, company)
-            if mappings:
-                mapped, unmapped = apply_dropdown_mapping(records, mappings)
-                print(f"   {company}: {mapped} mapped, {unmapped} unmapped")
-            else:
-                print(f"   {company}: No mappings found, using original names")
+            print(f"\n   📋 {company}:")
+            print(f"      • Total records from file: {len(records)}")
+            print(f"      • Unique dropdown fields: {len(all_dropdown_names_by_company[company])}")
             
-            # Filter out TPA, Network, and empty Dropdown_Name rows
+            # Filter out unwanted dropdown names FIRST (before mapping)
             filtered_records = [
                 r for r in records 
                 if r.get("Dropdown_Name", "") not in SKIP_DROPDOWN_NAMES
             ]
             skipped = len(records) - len(filtered_records)
             if skipped > 0:
-                print(f"   {company}: Skipped {skipped} hierarchy rows (TPA/Network/empty)")
+                print(f"      • Skipped {skipped} rows (empty/unwanted fields)")
+            
+            # Apply mapping only to filtered records
+            mappings = load_dropdown_mappings(db, company)
+            if mappings:
+                mapped, unmapped = apply_dropdown_mapping(filtered_records, mappings)
+                total_mapped += mapped
+                total_unmapped += unmapped
+                print(f"      • Mapped: {mapped}, Unmapped: {unmapped}")
+            else:
+                print(f"      • No mappings found, using original names")
+            
+            # Note: TPA/Network expansion is now done in the formatter when writing the txt file
+            # No need to expand here anymore
             
             all_records.extend(filtered_records)
+        
+        # Get unique dropdown names being inserted
+        unique_dropdowns = set(r.get("Dropdown_Name", "") for r in all_records if r.get("Dropdown_Name", ""))
+        
+        print(f"\n   {'='*50}")
+        print(f"   📊 MAPPING TOTALS:")
+        print(f"      • Total mapped: {total_mapped}")
+        print(f"      • Total unmapped: {total_unmapped}")
+        print(f"      • Unique dropdown fields to insert: {len(unique_dropdowns)}")
+        print(f"   {'='*50}")
         
         db.connection.autocommit = False  # Start transaction
         
         # Delete old data for affected companies only
         print(f"\n🗑️ Deleting old data for: {', '.join(records_by_company.keys())}")
+        total_deleted = 0
         for company in records_by_company.keys():
             db.cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE Company = %s", (company,))
-            print(f"   • {company}: {db.cursor.rowcount} rows deleted")
+            deleted = db.cursor.rowcount
+            total_deleted += deleted
+            print(f"   • {company}: {deleted} rows deleted")
         
         # Insert new data in batches
         print(f"\n📥 Inserting {len(all_records)} new records...")
@@ -260,14 +327,31 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         
         # Commit transaction
         db.connection.commit()
-        print(f"\n✅ SUCCESS: {rows_inserted} rows inserted")
-        print("=" * 60)
         
-        return True, rows_inserted, f"Successfully uploaded {rows_inserted} records"
+        # Calculate duration
+        upload_duration = time.time() - upload_start_time
+        minutes = int(upload_duration // 60)
+        seconds = upload_duration % 60
+        
+        print(f"\n" + "=" * 70)
+        print(f"✅ DATABASE UPLOAD COMPLETED SUCCESSFULLY")
+        print(f"=" * 70)
+        print(f"   📊 FINAL SUMMARY:")
+        print(f"      • Companies processed: {len(records_by_company)}")
+        print(f"      • Total rows deleted: {total_deleted}")
+        print(f"      • Total rows inserted: {rows_inserted}")
+        print(f"      • Unique dropdown fields: {len(unique_dropdowns)}")
+        print(f"   ⏱️  Duration: {minutes}m {seconds:.2f}s")
+        print(f"   🕐 End Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"=" * 70)
+        
+        return True, rows_inserted, f"Successfully uploaded {rows_inserted} records in {minutes}m {seconds:.2f}s"
         
     except Exception as e:
+        upload_duration = time.time() - upload_start_time
         print(f"\n❌ ERROR: {e}")
         print("🔄 Rolling back transaction...")
+        print(f"   ⏱️  Duration before failure: {upload_duration:.2f}s")
         if db.connection:
             db.connection.rollback()
         return False, 0, f"Upload failed: {str(e)}"
@@ -295,13 +379,19 @@ def upload_single_file(file_path: str) -> Tuple[bool, int, str]:
     if not records:
         return False, 0, "No valid records found"
     
-    # Get company name from first record
+    # Get company name from first record and standardize it
     company = records[0].get("Company", "")
     if not company:
         return False, 0, "Company name not found in records"
     
-    print(f"   Company: {company}")
+    # Standardize company name to match database naming convention
+    standardized_company = standardize_company_name(company)
+    print(f"   Company: {standardized_company}")
     print(f"   Records: {len(records)}")
+    
+    # Update all records with standardized company name
+    for record in records:
+        record["Company"] = standardized_company
     
     # Connect to database
     db = get_db_connection()
@@ -317,6 +407,9 @@ def upload_single_file(file_path: str) -> Tuple[bool, int, str]:
             print(f"   Mapped: {mapped}, Unmapped: {unmapped}")
         else:
             print(f"   No mappings found, using original names")
+        
+        # Note: TPA/Network expansion is now done in the formatter when writing the txt file
+        # No need to expand here anymore
         
         db.connection.autocommit = False
         

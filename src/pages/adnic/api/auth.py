@@ -104,6 +104,7 @@ class ADNICAuth:
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_CompanyName"]').fill("API Extraction Test Company")
             await self.page.locator('//*[@id="ContentPlaceHolder1_ddl_buisnessNature"]').select_option(label="Other Services & Activities")
             await self.page.locator('//*[@id="ContentPlaceHolder1_ddl_City"]').select_option("Dubai")
+            await asyncio.sleep(0.8)  # Wait for location field to be ready after city selection
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_location"]').fill("Dubai")
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_contactperson"]').fill("Test Contact")
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_ContactNumber"]').fill("0501234567")
