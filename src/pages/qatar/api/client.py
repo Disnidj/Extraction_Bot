@@ -31,6 +31,24 @@ class QatarAPIClient:
         if self.session:
             await self.session.close()
     
+    async def get_industries(self) -> list:
+        """
+        Get industry categories.
+        
+        Returns:
+            list: Industry data
+        """
+        url = API_ENDPOINTS['industry']
+        qatar_logger.debug(f"Fetching industries: {url}")
+        
+        async with self.session.get(url) as response:
+            data = await response.json()
+            if "response" in data:
+                return data.get("response", [])
+            else:
+                qatar_logger.error(f"Industry API error: {data}")
+                return []
+    
     async def get_emirates(self, group_id: int) -> list:
         """
         Get emirates list for a group.

@@ -18,6 +18,7 @@ from src.utils.logger import adnic_logger
 from src.utils.load_yaml import ADNIC_GENERATED_CENSUS_DIR
 import asyncio
 import os
+import html
 
 
 class ADNICAuth:
@@ -39,6 +40,7 @@ class ADNICAuth:
         self.context: BrowserContext = None
         self.page: Page = None
         self.memid: str = None
+        self.business_nature_options: list = []  # Store extracted Business Nature options
     
     async def login(self) -> bool:
         """
@@ -86,9 +88,59 @@ class ADNICAuth:
             print(f"   ❌ Login failed: {e}")
             return False
     
+    async def extract_business_nature(self) -> list:
+        """
+        Extract Business Nature dropdown options from the CompanyRegistration page.
+        
+        This must be called while on the CompanyRegistration page,
+        before navigating to other pages.
+        
+        Returns:
+            List of dicts with 'name' and 'value' keys
+        """
+        print("   📋 Extracting Business Nature options...")
+        
+        try:
+            # Find the Business Nature dropdown
+            dropdown = self.page.locator('//*[@id="ContentPlaceHolder1_ddl_buisnessNature"]')
+            
+            # Wait for dropdown to be visible
+            await dropdown.wait_for(state="visible", timeout=5000)
+            
+            # Get all options from the dropdown
+            options = await dropdown.locator("option").all()
+            
+            business_nature_options = []
+            for option in options:
+                value = await option.get_attribute("value")
+                text = await option.inner_text()
+                
+                # Skip the placeholder option (empty value)
+                if value and value.strip():
+                    # Decode HTML entities (e.g., &amp; -> &)
+                    decoded_text = html.unescape(text.strip())
+                    decoded_value = html.unescape(value.strip())
+                    
+                    business_nature_options.append({
+                        "name": decoded_text,
+                        "value": decoded_value
+                    })
+            
+            self.business_nature_options = business_nature_options
+            adnic_logger.info(f"Extracted {len(business_nature_options)} Business Nature options")
+            print(f"   ✓ Business Nature: {len(business_nature_options)} options extracted")
+            
+            return business_nature_options
+            
+        except Exception as e:
+            adnic_logger.error(f"Error extracting Business Nature: {e}")
+            print(f"   ⚠️ Could not extract Business Nature: {e}")
+            return []
+    
     async def fill_company_form(self) -> bool:
         """
         Fill the company registration form with dummy data (Step 2).
+        Also extracts Business Nature dropdown values before filling.
         """
         print("📝 Step 2: Filling company registration form...")
         
@@ -99,6 +151,9 @@ class ADNICAuth:
             if "CompanyRegistration" not in self.page.url:
                 print(f"   ⚠️ Not on registration page")
                 return False
+            
+            # Extract Business Nature options BEFORE filling the form
+            await self.extract_business_nature()
             
             # Fill form fields rapidly
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_CompanyName"]').fill("API Extraction Test Company")
@@ -367,7 +422,7 @@ class ADNICAuth:
         if not await self.login():
             raise Exception("Login failed")
         
-        # Step 2: Fill company form
+        # Step 2: Fill company form (also extracts Business Nature)
         await self.fill_company_form()
         
         # Step 3: Upload census
@@ -382,6 +437,15 @@ class ADNICAuth:
         
         print(f"\n   🌐 Final URL: {self.page.url}")
         return self.page
+    
+    def get_business_nature_options(self) -> list:
+        """
+        Get the extracted Business Nature options.
+        
+        Returns:
+            List of dicts with 'name' and 'value' keys
+        """
+        return self.business_nature_options
     
     async def close(self):
         """Close browser and cleanup."""

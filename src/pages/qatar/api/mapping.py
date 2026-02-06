@@ -2,7 +2,8 @@
 Qatar Insurance Portal Mapping Configuration
 Hardcoded values for Dubai region and NAS TPA only.
 """
-
+# Default region for all records
+PORTAL_REGION = "Dubai"
 # Qatar uses group_id 272
 QATAR_MAPPING = {
     "portal_name": "QATAR INSURANCE CO",
@@ -35,5 +36,6 @@ API_ENDPOINTS = {
     "emirates": f"{API_BASE_URL}/quotes/generate/emirates",
     "tpa": f"{API_BASE_URL}/quotes/generate/tpa", 
     "plan": f"{API_BASE_URL}/quotes/generate/plan",
-    "benefits": f"{API_BASE_URL}/quotes/generate/benefits"
+    "benefits": f"{API_BASE_URL}/quotes/generate/benefits",
+    "industry": f"{API_BASE_URL}/quotes/generate/industry"
 }

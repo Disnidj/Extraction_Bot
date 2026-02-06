@@ -6,7 +6,7 @@ Uses ADNICApiClient to make API calls and collects all possible values.
 """
 
 import asyncio
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from patchright.async_api import Page
 from src.utils.logger import adnic_logger
 from .client import ADNICApiClient, DropdownOption
@@ -26,21 +26,24 @@ class ADNICApiExtractor:
     Orchestrates API extraction for all ADNIC dropdown combinations.
     
     Extraction Strategy:
+    0. Pre-Level: Get Business Nature options (from registration page)
     1. Level 0: Get all independent options (TPA, Annual Limit, etc.)
     2. Level 1: For each TPA → Get Networks
     3. Level 2: For each TPA+Network → Get TCover, Pharmacy, Dental, Optical
     4. Level 3: For each TPA+Network+TCover → Get Emergency options
     """
     
-    def __init__(self, page: Page):
+    def __init__(self, page: Page, business_nature_options: List[Dict] = None):
         """
         Initialize extractor with authenticated page.
         
         Args:
             page: Playwright page with active ADNIC session
+            business_nature_options: Pre-extracted Business Nature options from auth flow (optional)
         """
         self.client = ADNICApiClient(page)
         self.records: List[Dict] = []
+        self.business_nature_options = business_nature_options or []
         self.stats = {
             "tpa_count": 0,
             "network_count": 0,
@@ -81,6 +84,41 @@ class ADNICApiExtractor:
             data["Territorial Cover - Elective"] = tcover_elective
         
         return {"data": data}
+    
+    async def extract_business_nature(self) -> List[DropdownOption]:
+        """
+        Extract Business Nature options (Pre-Level).
+        
+        Uses pre-extracted options from auth flow if available.
+        
+        Returns:
+            List of Business Nature DropdownOption objects
+        """
+        print("\n📥 Pre-Level: Extracting Business Nature Options...")
+        
+        if self.business_nature_options:
+            # Convert dict format to DropdownOption objects
+            options = [
+                DropdownOption(
+                    name=opt.get("name", ""),
+                    value=opt.get("value", ""),
+                    is_default=False
+                )
+                for opt in self.business_nature_options
+            ]
+            
+            # Create record for Business Nature
+            record = self._create_record(
+                "Business Nature",
+                [o.name for o in options]
+            )
+            self.records.append(record)
+            
+            print(f"   ✓ Business Nature: {len(options)} options")
+            return options
+        else:
+            print("   ⚠️ No Business Nature options available")
+            return []
     
     async def extract_level_0(self) -> Dict[str, List[DropdownOption]]:
         """
@@ -243,6 +281,7 @@ class ADNICApiExtractor:
         Extract ALL possible dropdown combinations.
         
         Iteration Order:
+        Pre-Level: Get Business Nature options (from registration page)
         FOR each TPA in [ADNIC, NextCare, Nas]:
             FOR each Network in [networks for this TPA]:
                 FOR each TerritorialCover in [covers for TPA+Network]:
@@ -256,6 +295,9 @@ class ADNICApiExtractor:
         print("\n" + "=" * 60)
         print("🚀 ADNIC API EXTRACTION - ALL COMBINATIONS")
         print("=" * 60)
+        
+        # Pre-Level: Business Nature options
+        await self.extract_business_nature()
         
         # Level 0: Independent options
         independent = await self.extract_level_0()

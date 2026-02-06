@@ -90,6 +90,18 @@ class TakafulAPIClient:
             return data.get("response", [])
         return []
     
+    async def get_industries(self):
+        """
+        Fetch industry categories (Business Nature).
+        
+        Returns:
+            list: Industry data or empty list
+        """
+        data = await self._get(ENDPOINTS["industry"])
+        if data:
+            return data.get("response", [])
+        return []
+    
     async def get_plans(self, tpa_id):
         """
         Fetch plans for a TPA.

@@ -1,16 +1,23 @@
-"""
+"""  
 Qatar Benefits Formatter
 Converts JSON extraction results to database-compatible format.
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
 - Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+
+TPA/Network Expansion:
+- Uses shared expansion service from src.services.formatter_service
+- Records with empty TPA/Network are expanded to all TPA/Network combinations
 """
 
 import json
 import os
 from datetime import datetime
+from typing import List, Dict
+from src.services.formatter_service import expand_empty_tpa_network
 from src.utils.logger import qatar_logger
+from .mapping import PORTAL_REGION
 
 
 # Default Broker ID - can be configured
@@ -57,6 +64,17 @@ class QatarFormatter:
             raise ValueError("No results to format. Load or provide results first.")
         
         self.output_lines = []
+        
+        # Pre-Level: Process Industry Categories
+        industry_categories = self.results.get("industry_categories", [])
+        if industry_categories:
+            self._add_rows(
+                tpa="",
+                network="",
+                region=PORTAL_REGION,  # Default Region for pre-level
+                dropdown_name="Industry Categories",
+                values=industry_categories
+            )
         
         # Iterate through the hierarchy: emirates -> tpas -> plans -> benefits
         for emirate_name, emirate_data in self.results.get("emirates", {}).items():
@@ -159,6 +177,7 @@ class QatarFormatter:
     def save_to_file(self, output_dir: str = "extracted_data") -> str:
         """
         Save formatted output to text file.
+        Expands records with empty TPA/Network to all combinations.
         
         Args:
             output_dir: Base directory to save file
@@ -169,6 +188,12 @@ class QatarFormatter:
         if not self.output_lines:
             raise ValueError("No formatted output. Run format_to_text first.")
         
+        # Parse JSON lines back to dicts for expansion
+        parsed_records = [json.loads(line) for line in self.output_lines]
+        
+        # Expand records with empty TPA/Network using shared service
+        expanded_records = expand_empty_tpa_network(parsed_records)
+        
         # Save to portal-specific subfolder
         portal_dir = os.path.join(output_dir, "qatar")
         os.makedirs(portal_dir, exist_ok=True)
@@ -176,11 +201,11 @@ class QatarFormatter:
         output_file = os.path.join(portal_dir, f"qatar_extracted_{timestamp}.txt")
         
         with open(output_file, "w", encoding="utf-8") as f:
-            for line in self.output_lines:
-                f.write(line + "\n")
+            for record in expanded_records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
         
-        print(f"📄 Formatted output saved to {output_file}")
-        qatar_logger.debug(f"Formatted output saved to {output_file}")
+        print(f"\n💾 Saved {len(expanded_records)} database rows to: {output_file}")
+        qatar_logger.debug(f"Saved {len(expanded_records)} rows to {output_file}")
         return output_file
     
     def format_and_save(self, output_dir: str = "extracted_data") -> str:

@@ -26,6 +26,7 @@ class QatarAPIExtractor:
             "portal": QATAR_MAPPING["portal_name"],
             "group_id": QATAR_MAPPING["group_id"],
             "extracted_at": datetime.now().isoformat(),
+            "industry_categories": [],
             "emirates": {}
         }
         self.stats = {
@@ -38,11 +39,22 @@ class QatarAPIExtractor:
     async def extract_all_benefits(self) -> dict:
         """
         Extract all benefits for Dubai + NAS TPA configuration.
+        Also extracts Industry Categories (Business Nature) as Pre-Level.
         
         Returns:
             dict: Complete extraction results
         """
         async with QatarAPIClient(self.auth) as client:
+            # Pre-Level: Extract Industry Categories
+            print("\n📥 Pre-Level: Extracting Industry Categories...")
+            industries = await client.get_industries()
+            if industries:
+                industry_names = [ind["industry_name"] for ind in industries]
+                self.results["industry_categories"] = industry_names
+                print(f"   ✓ Industry Categories: {len(industry_names)} options")
+            else:
+                print("   ⚠️ No Industry Categories found")
+            
             # Iterate through hardcoded mapping (Dubai only, NAS only)
             for emirate_name, emirate_config in QATAR_MAPPING["emirates"].items():
                 print(f"\n📍 Processing emirate: {emirate_name}")

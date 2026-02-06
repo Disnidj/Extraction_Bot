@@ -18,6 +18,7 @@ from src.utils.logger import sukoon_logger
 from src.utils.load_yaml import SUKOON_GENERATED_CENSUS_DIR
 import asyncio
 import os
+import html
 
 
 class SukoonAuth:
@@ -27,7 +28,7 @@ class SukoonAuth:
     Flow:
     1. Login with credentials
     2. Click CREATE to start new quote
-    3. Fill company form with dummy data
+    3. Fill company form with dummy data (and extract Business Nature options)
     4. Upload census file
     5. Navigate to GenerateQuotes page (where API works)
     
@@ -39,6 +40,7 @@ class SukoonAuth:
         self.browser = None
         self.context: BrowserContext = None
         self.page: Page = None
+        self.business_nature_options: list = []  # Store extracted Business Nature options
     
     async def login(self) -> bool:
         """
@@ -117,9 +119,93 @@ class SukoonAuth:
             print(f"   ⚠️ Note: {e}")
             return True  # Continue anyway
     
+    async def extract_business_nature(self) -> list:
+        """
+        Extract Business Nature dropdown options from the GenerateQuotes page.
+        
+        The GenerateQuotes page contains a hidden <select> element with all
+        Business Nature options that we can parse from the page HTML.
+        
+        Must be called AFTER navigating to GenerateQuotes page.
+        
+        Returns:
+            List of dicts with 'name' and 'value' keys
+        """
+        print("   📋 Extracting Business Nature options from page...")
+        
+        try:
+            await self.page.wait_for_load_state('networkidle')
+            await asyncio.sleep(0.3)
+            
+            business_nature_options = []
+            
+            # The GenerateQuotes page contains a <select> element with Business Nature options
+            # Selector: #ContentPlaceHolder1_ddlNatureOfBusiness
+            dropdown = self.page.locator('#ContentPlaceHolder1_ddlNatureOfBusiness')
+            
+            try:
+                await dropdown.wait_for(state="attached", timeout=5000)
+                
+                # Get all options from the select element
+                options = await dropdown.locator("option").all()
+                
+                for option in options:
+                    value = await option.get_attribute("value")
+                    text = await option.inner_text()
+                    text = text.strip()
+                    
+                    # Skip placeholder options (empty value or "Please Select")
+                    if value and value.strip() and text.lower() != "please select":
+                        decoded_text = html.unescape(text)
+                        decoded_value = html.unescape(value.strip())
+                        business_nature_options.append({
+                            "name": decoded_text,
+                            "value": decoded_value
+                        })
+                        
+            except Exception as e:
+                sukoon_logger.debug(f"Could not find select element: {e}")
+                
+                # Alternative: Try parsing page HTML directly
+                try:
+                    page_content = await self.page.content()
+                    
+                    # Look for the select element in HTML
+                    import re
+                    select_pattern = r'<select[^>]*id="ContentPlaceHolder1_ddlNatureOfBusiness"[^>]*>(.*?)</select>'
+                    select_match = re.search(select_pattern, page_content, re.DOTALL | re.IGNORECASE)
+                    
+                    if select_match:
+                        options_html = select_match.group(1)
+                        option_pattern = r'<option[^>]*value="([^"]*)"[^>]*>([^<]*)</option>'
+                        option_matches = re.findall(option_pattern, options_html, re.IGNORECASE)
+                        
+                        for value, text in option_matches:
+                            if value and value.strip() and text.strip().lower() != "please select":
+                                decoded_text = html.unescape(text.strip())
+                                decoded_value = html.unescape(value.strip())
+                                business_nature_options.append({
+                                    "name": decoded_text,
+                                    "value": decoded_value
+                                })
+                except Exception as parse_err:
+                    sukoon_logger.debug(f"HTML parsing also failed: {parse_err}")
+            
+            self.business_nature_options = business_nature_options
+            sukoon_logger.info(f"Extracted {len(business_nature_options)} Business Nature options")
+            print(f"   ✓ Business Nature: {len(business_nature_options)} options extracted")
+            
+            return business_nature_options
+            
+        except Exception as e:
+            sukoon_logger.error(f"Error extracting Business Nature: {e}")
+            print(f"   ⚠️ Could not extract Business Nature: {e}")
+            return []
+    
     async def fill_company_form(self, region: str = "Dubai") -> bool:
         """
         Fill company form with dummy data.
+        Also extracts Business Nature dropdown values before filling.
         
         Selectors from process_page.py:
         - Company Name: #ContentPlaceHolder1_txtCompanyName
@@ -319,6 +405,10 @@ class SukoonAuth:
         # Step 5: Navigate to GenerateQuotes
         await self.navigate_to_generate_quotes()
         
+        # Step 6: Extract Business Nature options from the GenerateQuotes page
+        print("\n📋 Step 6: Extracting Business Nature options...")
+        await self.extract_business_nature()
+        
         print(f"\n   🌐 Final URL: {self.page.url}")
         return self.page
     
@@ -332,3 +422,12 @@ class SukoonAuth:
                 await self.browser.close()
         except:
             pass
+    
+    def get_business_nature_options(self) -> list:
+        """
+        Get extracted Business Nature options.
+        
+        Returns:
+            List of dicts with 'name' and 'value' keys
+        """
+        return self.business_nature_options
