@@ -8,9 +8,24 @@ Similar to Takaful's mapping.py for TPA/emirate configuration.
 # Base URL for ADNIC AJAX services
 ADNIC_API_BASE_URL = "https://www.adnicinsure.com/Eng/Services/INeedAjaxServices.asmx"
 
+# Company Registration page URL (for Business Nature extraction via AJAX)
+COMPANY_REGISTRATION_URL = "https://www.adnicinsure.com/MemberLogin/CompanyRegistration.aspx"
+
 # Portal information
 PORTAL_NAME = "ADNIC"
 PORTAL_REGION = "Dubai"
+
+# =====================================================
+# Pre-Level: Registration Page Fields (extracted from HTML/DOM)
+# =====================================================
+REGISTRATION_PAGE_FIELDS = [
+    {
+        "field_id": "ContentPlaceHolder1_ddl_buisnessNature",
+        "display_name": "Business Nature",
+        "description": "Type of business/industry for the company",
+        "extraction_method": "dom_parse"
+    },
+]
 
 # =====================================================
 # Level 0: Independent APIs (no dependencies)

@@ -28,6 +28,7 @@ class TakafulAPIExtractor:
     async def extract_all_benefits(self):
         """
         Extract all benefit dropdown values for Dubai TPAs and Plans.
+        Also extracts Industry Categories (Business Nature) as Pre-Level.
         Uses hardcoded mapping for TPA IDs, fetches plans dynamically,
         then gets all benefit dropdown values for each plan.
         
@@ -37,10 +38,26 @@ class TakafulAPIExtractor:
         self.results = {
             "portal": "TAKAFUL EMARAT",
             "extracted_at": datetime.now().isoformat(),
+            "industry_categories": [],
             "emirates": {}
         }
         
         async with TakafulAPIClient(self.auth) as client:
+            # Pre-Level: Extract Industry Categories (Business Nature)
+            print("\n📥 Pre-Level: Extracting Industry Categories (Business Nature)...")
+            industries = await client.get_industries()
+            if industries:
+                # Only include industries where allows="true"
+                allowed_industries = [
+                    ind["industry_name"] 
+                    for ind in industries 
+                    if ind.get("allows", "").lower() == "true"
+                ]
+                self.results["industry_categories"] = allowed_industries
+                print(f"   ✓ Industry Categories: {len(allowed_industries)} options")
+            else:
+                print("   ⚠️ No Industry Categories found")
+            
             # Process Dubai only (as per requirements)
             dubai_data = TAKAFUL_MAPPING["emirates"]["Dubai"]
             dubai_results = await self._extract_emirate_data(client, "Dubai", dubai_data)

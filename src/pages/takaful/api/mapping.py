@@ -4,8 +4,12 @@ Hardcoded mapping of Emirates, TPAs, and Plans for Dubai.
 Excludes Aafiya Ebp as requested.
 """
 
+# ============================================================================# PORTAL CONSTANTS
 # ============================================================================
-# HARDCODED MAPPING - Dubai Only, Excluding Aafiya Ebp
+
+PORTAL_REGION = "Dubai"  # Default region for all records
+
+# ============================================================================# HARDCODED MAPPING - Dubai Only, Excluding Aafiya Ebp
 # ============================================================================
 
 TAKAFUL_MAPPING = {
@@ -46,5 +50,6 @@ ENDPOINTS = {
     "emirates": "/quotes/generate/emirates",
     "tpa": "/quotes/generate/tpa",
     "plan": "/quotes/generate/plan",
-    "benefits": "/quotes/generate/benefits"
+    "benefits": "/quotes/generate/benefits",
+    "industry": "/quotes/generate/industry"
 }

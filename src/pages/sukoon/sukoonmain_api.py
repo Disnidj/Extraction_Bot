@@ -67,7 +67,10 @@ async def login_sukoon_api(playwright: Playwright, referral_id=None, output_dir:
         # =====================================================
         print("\n🔌 Step 6: Starting API extraction...\n")
         
-        extractor = SukoonApiExtractor(page)
+        # Get Business Nature options extracted during auth flow
+        business_nature_options = auth.get_business_nature_options()
+        
+        extractor = SukoonApiExtractor(page, business_nature_options=business_nature_options)
         records = await extractor.extract_all(regions=["Dubai"])
         
         # =====================================================

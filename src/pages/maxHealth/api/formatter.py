@@ -1,4 +1,4 @@
-"""
+"""  
 MaxHealth Benefits Formatter
 Converts JSON extraction results to database-compatible format.
 
@@ -22,11 +22,16 @@ Business Rules Applied:
 - Location locked to Dubai
 - Policy Holder Types filtered per TPA+Network combination
 - Plans from DHA (Dubai Health Authority) only
+
+TPA/Network Expansion:
+- Uses shared expansion service from src.services.formatter_service
+- Records with empty TPA/Network are expanded to all TPA/Network combinations
 """
 
 import json
 import os
 from datetime import datetime
+from src.services.formatter_service import expand_empty_tpa_network
 from src.utils.logger import maxhealth_logger
 
 
@@ -149,6 +154,7 @@ class MaxHealthFormatter:
     def save_to_file(self, output_dir: str = "extracted_data") -> str:
         """
         Save formatted output to text file.
+        Expands records with empty TPA/Network to all combinations.
         
         Args:
             output_dir: Base directory to save file
@@ -159,6 +165,12 @@ class MaxHealthFormatter:
         if not self.output_lines:
             raise ValueError("No formatted output. Run format_to_text first.")
         
+        # Parse JSON lines back to dicts for expansion
+        parsed_records = [json.loads(line) for line in self.output_lines]
+        
+        # Expand records with empty TPA/Network using shared service
+        expanded_records = expand_empty_tpa_network(parsed_records)
+        
         portal_dir = os.path.join(output_dir, "maxhealth")
         os.makedirs(portal_dir, exist_ok=True)
         
@@ -166,11 +178,11 @@ class MaxHealthFormatter:
         output_file = os.path.join(portal_dir, f"maxhealth_extracted_{timestamp}.txt")
         
         with open(output_file, "w", encoding="utf-8") as f:
-            for line in self.output_lines:
-                f.write(line + "\n")
+            for record in expanded_records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
         
-        print(f"📄 Formatted output saved to {output_file}")
-        maxhealth_logger.debug(f"Formatted output saved to {output_file}")
+        print(f"\n💾 Saved {len(expanded_records)} database rows to: {output_file}")
+        maxhealth_logger.debug(f"Saved {len(expanded_records)} rows to {output_file}")
         return output_file
     
     def format_and_save(self, output_dir: str = "extracted_data") -> str:

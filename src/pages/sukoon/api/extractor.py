@@ -23,6 +23,7 @@ class SukoonApiExtractor:
     Orchestrates API extraction for Sukoon dropdowns.
     
     Extraction Strategy (MUCH SIMPLER than ADNIC):
+    0. Pre-Level: Get Business Nature options (from company form page)
     1. Get list of indemnityId options (the "master switch")
     2. FOR each indemnityId → Call PopulateDDL → Get ALL sub-options
     3. Record all combinations
@@ -34,15 +35,17 @@ class SukoonApiExtractor:
     - Sukoon: 1 loop, ~5 API calls for Dubai
     """
     
-    def __init__(self, page: Page):
+    def __init__(self, page: Page, business_nature_options: List[Dict] = None):
         """
         Initialize extractor with authenticated page.
         
         Args:
             page: Playwright page with active Sukoon session
+            business_nature_options: Pre-extracted Business Nature options from auth flow (optional)
         """
         self.client = SukoonApiClient(page)
         self.records: List[Dict] = []
+        self.business_nature_options = business_nature_options or []
         self.stats = {
             "regions_count": 0,
             "indemnity_count": 0,
@@ -86,6 +89,41 @@ class SukoonApiExtractor:
             }
         }
     
+    async def extract_business_nature(self) -> List[DropdownOption]:
+        """
+        Extract Business Nature options (Pre-Level).
+        
+        Uses pre-extracted options from auth flow if available.
+        
+        Returns:
+            List of Business Nature DropdownOption objects
+        """
+        print("\n📥 Pre-Level: Extracting Business Nature Options...")
+        
+        if self.business_nature_options:
+            # Convert dict format to DropdownOption objects
+            options = [
+                DropdownOption(
+                    text=opt.get("name", ""),
+                    value=opt.get("value", ""),
+                    selected=False
+                )
+                for opt in self.business_nature_options
+            ]
+            
+            # Create record for Business Nature (no TPA/Network context)
+            record = self._create_record(
+                "Business Nature",
+                [o.text for o in options]
+            )
+            self.records.append(record)
+            
+            print(f"   ✓ Business Nature: {len(options)} options")
+            return options
+        else:
+            print("   ⚠️ No Business Nature options available")
+            return []
+    
     async def extract_all(self, regions: List[str] = None) -> List[Dict]:
         """
         Extract ALL possible dropdown combinations.
@@ -123,6 +161,11 @@ class SukoonApiExtractor:
         print("📌 Using Mega API pattern: PopulateDDL")
         print("📌 One API call returns ALL options for each indemnity level")
         print("=" * 60)
+        
+        # ═══════════════════════════════════════════════════════
+        # Pre-Level: Extract Business Nature options
+        # ═══════════════════════════════════════════════════════
+        await self.extract_business_nature()
         
         for region in regions:
             await self._extract_region(region)

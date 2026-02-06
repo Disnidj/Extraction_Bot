@@ -47,16 +47,20 @@ async def login_adnic_api(playwright: Playwright, referral_id=None, output_dir: 
     try:
         # =====================================================
         # Step 1-5: Establish authenticated session
+        # (Also extracts Business Nature during Step 2)
         # =====================================================
         auth = ADNICAuth(playwright)
         page = await auth.establish_session()
+        
+        # Get Business Nature options extracted during auth
+        business_nature_options = auth.get_business_nature_options()
         
         # =====================================================
         # Step 6: Run API extraction
         # =====================================================
         print("\n🔌 Step 6: Starting API extraction...\n")
         
-        extractor = ADNICApiExtractor(page)
+        extractor = ADNICApiExtractor(page, business_nature_options=business_nature_options)
         records = await extractor.extract_all()
         
         # =====================================================

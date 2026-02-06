@@ -9,7 +9,7 @@ Unlike ADNIC (14 separate APIs), Sukoon's PopulateDDL returns everything in one 
 
 # Portal information
 PORTAL_NAME = "SUKOON INSURANCE"
-PORTAL_REGION = "UAE"
+PORTAL_REGION = "Dubai"
 
 # The single master API endpoint
 SUKOON_API_URL = "https://smeonline.sukoon.com/GenerateQuotes.aspx/PopulateDDL"
