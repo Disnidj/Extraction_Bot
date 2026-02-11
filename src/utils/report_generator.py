@@ -102,7 +102,8 @@ class ExtractionReportGenerator:
         db_upload_end: datetime,
         total_duration: float,
         output_folder: str,
-        portals_processed: List[str]
+        portals_processed: List[str],
+        deletion_details: Dict = None
     ) -> str:
         """
         Generate the extraction report PDF.
@@ -121,6 +122,7 @@ class ExtractionReportGenerator:
             total_duration: Total process duration in seconds
             output_folder: Path to extracted data folder
             portals_processed: List of portal names processed
+            deletion_details: Dict with deletion info per portal {company: {rows_deleted, dropdown_names}}
             
         Returns:
             str: Path to generated PDF report
@@ -246,6 +248,26 @@ class ExtractionReportGenerator:
         story.append(self._create_info_table(db_data, highlight_success=(0, 1) if db_upload_success else None, highlight_fail=(0, 1) if not db_upload_success else None))
         story.append(Spacer(1, 6))
         
+        # === DELETION DETAILS BY PORTAL ===
+        if deletion_details and db_upload_success:
+            story.append(self._create_section_header("🗑️ Deletion Details by Portal"))
+            
+            deletion_table_data = [['Portal', 'Rows Deleted', 'Dropdown Names Deleted']]
+            
+            for company, details in deletion_details.items():
+                rows_deleted = details.get('rows_deleted', 0)
+                dropdown_names = details.get('dropdown_names', [])
+                dropdown_names_str = ', '.join(dropdown_names) if dropdown_names else 'None'
+                
+                deletion_table_data.append([
+                    company,
+                    str(rows_deleted),
+                    dropdown_names_str
+                ])
+            
+            story.append(self._create_deletion_table(deletion_table_data))
+            story.append(Spacer(1, 6))
+        
         # === COMPLETE PROCESS SUMMARY ===
         story.append(self._create_section_header("🏁 Complete Process Summary"))
         
@@ -363,6 +385,35 @@ class ExtractionReportGenerator:
         table.setStyle(TableStyle(style))
         return table
     
+    def _create_deletion_table(self, data: List[List[str]]) -> Table:
+        """Create a styled deletion details table."""
+        table = Table(data, colWidths=[90, 70, 190])
+        
+        style = [
+            # Header row
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#744210')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            
+            # Data rows
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('ALIGN', (0, 1), (1, -1), 'CENTER'),
+            ('ALIGN', (2, 1), (2, -1), 'LEFT'),
+            ('PADDING', (0, 0), (-1, -1), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]
+        
+        # Alternate row colors
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fffaf0')))
+        
+        table.setStyle(TableStyle(style))
+        return table
+    
     def _create_summary_table(self, data: List[List[str]]) -> Table:
         """Create a styled summary table."""
         table = Table(data, colWidths=[180, 100, 80])
@@ -412,7 +463,8 @@ def generate_extraction_report(
     db_upload_end: datetime,
     total_duration: float,
     output_folder: str,
-    portals_processed: List[str]
+    portals_processed: List[str],
+    deletion_details: Dict = None
 ) -> str:
     """
     Convenience function to generate extraction report.
@@ -434,5 +486,6 @@ def generate_extraction_report(
         db_upload_end=db_upload_end,
         total_duration=total_duration,
         output_folder=output_folder,
-        portals_processed=portals_processed
+        portals_processed=portals_processed,
+        deletion_details=deletion_details
     )

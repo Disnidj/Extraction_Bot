@@ -178,6 +178,9 @@ class ADNICAuth:
             )
             adnic_logger.debug("Location field is now enabled")
             
+            # Add extra delay to ensure field is fully ready
+            await asyncio.sleep(3.0)
+            
             adnic_logger.debug("Field: Location = 'Dubai'")
             await location_field.fill("Dubai")
             

@@ -174,7 +174,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         output_dir: Base output directory containing portal subdirectories
         
     Returns:
-        Tuple of (success: bool, rows_inserted: int, message: str)
+        Tuple of (success: bool, rows_inserted: int, message: str, deletion_details: dict)
     """
     upload_start_time = time.time()
     
@@ -189,7 +189,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     print("\n📁 Collecting extracted files...")
     extracted_files = collect_extracted_files(output_dir)
     if not extracted_files:
-        return False, 0, "No extracted files found"
+        return False, 0, "No extracted files found", {}
     
     print(f"   Found {len(extracted_files)} file(s)")
     for portal, filepath in extracted_files:
@@ -222,7 +222,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     print(f"   Companies: {', '.join(records_by_company.keys())}")
     
     if not records_by_company:
-        return False, 0, "No valid records found"
+        return False, 0, "No valid records found", {}
     
     # Connect to database
     print("\n🔌 Connecting to database...")
@@ -284,14 +284,50 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         
         db.connection.autocommit = False  # Start transaction
         
-        # Delete old data for affected companies only
-        print(f"\n🗑️ Deleting old data for: {', '.join(records_by_company.keys())}")
+        # Delete old data by Company + Dropdown_Name (after mapping)
+        print(f"\n🗑️ Deleting old data by Company + Dropdown Names...")
         total_deleted = 0
+        deletion_details = {}  # Track deletion info per company
+        
         for company in records_by_company.keys():
-            db.cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE Company = %s", (company,))
+            # Get unique dropdown names for this company (AFTER mapping)
+            company_records = [r for r in all_records if r.get("Company") == company]
+            dropdown_names_to_delete = set(
+                r.get("Dropdown_Name", "") 
+                for r in company_records 
+                if r.get("Dropdown_Name", "")
+            )
+            
+            if not dropdown_names_to_delete:
+                print(f"   • {company}: No dropdown names to delete")
+                deletion_details[company] = {
+                    'rows_deleted': 0,
+                    'dropdown_names': []
+                }
+                continue
+            
+            # Build DELETE query with IN clause
+            placeholders = ', '.join(['%s'] * len(dropdown_names_to_delete))
+            delete_query = f"""
+                DELETE FROM {TABLE_NAME} 
+                WHERE Company = %s 
+                AND Dropdown_Name IN ({placeholders})
+            """
+            
+            # Execute deletion
+            params = [company] + list(dropdown_names_to_delete)
+            db.cursor.execute(delete_query, params)
             deleted = db.cursor.rowcount
             total_deleted += deleted
+            
+            # Store deletion details
+            deletion_details[company] = {
+                'rows_deleted': deleted,
+                'dropdown_names': sorted(dropdown_names_to_delete)
+            }
+            
             print(f"   • {company}: {deleted} rows deleted")
+            print(f"      Dropdown names: {', '.join(sorted(dropdown_names_to_delete))}")
         
         # Insert new data in batches
         print(f"\n📥 Inserting {len(all_records)} new records...")
@@ -345,7 +381,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         print(f"   🕐 End Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"=" * 70)
         
-        return True, rows_inserted, f"Successfully uploaded {rows_inserted} records in {minutes}m {seconds:.2f}s"
+        return True, rows_inserted, f"Successfully uploaded {rows_inserted} records in {minutes}m {seconds:.2f}s", deletion_details
         
     except Exception as e:
         upload_duration = time.time() - upload_start_time
@@ -354,7 +390,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         print(f"   ⏱️  Duration before failure: {upload_duration:.2f}s")
         if db.connection:
             db.connection.rollback()
-        return False, 0, f"Upload failed: {str(e)}"
+        return False, 0, f"Upload failed: {str(e)}", {}
         
     finally:
         db.disconnect()
@@ -413,10 +449,27 @@ def upload_single_file(file_path: str) -> Tuple[bool, int, str]:
         
         db.connection.autocommit = False
         
-        # Delete old data for this company only
-        db.cursor.execute(f"DELETE FROM {TABLE_NAME} WHERE Company = %s", (company,))
-        deleted = db.cursor.rowcount
-        print(f"   Deleted {deleted} old rows for {company}")
+        # Delete old data by Company + Dropdown_Name (after mapping)
+        dropdown_names_to_delete = set(
+            r.get("Dropdown_Name", "") 
+            for r in records 
+            if r.get("Dropdown_Name", "")
+        )
+        
+        if dropdown_names_to_delete:
+            placeholders = ', '.join(['%s'] * len(dropdown_names_to_delete))
+            delete_query = f"""
+                DELETE FROM {TABLE_NAME} 
+                WHERE Company = %s 
+                AND Dropdown_Name IN ({placeholders})
+            """
+            params = [standardized_company] + list(dropdown_names_to_delete)
+            db.cursor.execute(delete_query, params)
+            deleted = db.cursor.rowcount
+            print(f"   Deleted {deleted} old rows for {standardized_company}")
+            print(f"   Dropdown names: {', '.join(sorted(dropdown_names_to_delete))}")
+        else:
+            print(f"   No dropdown names to delete for {standardized_company}")
         
         # Insert new data
         insert_query = f"""

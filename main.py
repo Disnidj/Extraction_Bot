@@ -364,7 +364,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
     print("=" * 70)
     
     db_upload_start = datetime.now()
-    success, rows_inserted, upload_msg = upload_to_database(run_output_dir)
+    success, rows_inserted, upload_msg, deletion_details = upload_to_database(run_output_dir)
     db_upload_end = datetime.now()
     db_upload_duration = db_upload_end - db_upload_start
     
@@ -377,6 +377,15 @@ async def run_api_extraction_mode(playwright, selected_companies):
         main_execution_logger.info(f"   Rows inserted: {rows_inserted}")
         main_execution_logger.info(f"   Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
         main_execution_logger.info(f"   Start: {db_upload_start.strftime('%H:%M:%S')} → End: {db_upload_end.strftime('%H:%M:%S')}")
+        
+        # Log deletion details per portal
+        if deletion_details:
+            main_execution_logger.info(f"\n   🗑️ Deletion Details by Portal:")
+            for company, details in deletion_details.items():
+                main_execution_logger.info(f"      • {company}:")
+                main_execution_logger.info(f"         - Rows deleted: {details['rows_deleted']}")
+                main_execution_logger.info(f"         - Dropdown names: {', '.join(details['dropdown_names']) if details['dropdown_names'] else 'None'}")
+        
         main_execution_logger.info(f"{'='*70}\n")
     else:
         print(f"❌ Database upload failed: {upload_msg}")
@@ -435,7 +444,8 @@ async def run_api_extraction_mode(playwright, selected_companies):
             db_upload_end=db_upload_end,
             total_duration=total_seconds,
             output_folder=run_output_dir,
-            portals_processed=[p['name'] for p in matching_portals]
+            portals_processed=[p['name'] for p in matching_portals],
+            deletion_details=deletion_details
         )
         print(f"✅ PDF Report generated: {pdf_path}")
         main_execution_logger.info(f"\n{'='*70}")
