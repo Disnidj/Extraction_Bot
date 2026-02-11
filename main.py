@@ -32,7 +32,7 @@ from src.pages.sukoon.sukoonmain_api import run_sukoon_api_extraction
 from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
 from src.services.db_service.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
-from src.utils.report_generator import generate_extraction_report
+from src.services.extraction_report.report_generator import generate_extraction_report
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
 from src.utils.clear_folder import clear_files
