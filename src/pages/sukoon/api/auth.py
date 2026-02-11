@@ -50,6 +50,7 @@ class SukoonAuth:
             bool: True if login successful
         """
         print("\n🔐 Step 1: Logging into Sukoon portal...")
+        sukoon_logger.info("Starting Sukoon login process...")
         
         try:
             args = ["--disable-blink-features=AutomationControlled"]
@@ -58,12 +59,16 @@ class SukoonAuth:
             self.context.set_default_timeout(60000)
             self.page = await self.context.new_page()
             
+            sukoon_logger.debug("Browser and page context created")
+            
             # Use existing LoginPage
             login_page = LoginPage(self.page)
+            sukoon_logger.debug("Calling LoginPage.login()...")
             login_result = await login_page.login()
             
             # Check if login was successful
             if login_result is False:
+                sukoon_logger.error("Login failed - login_page returned False")
                 print("   ❌ Login failed")
                 return False
             

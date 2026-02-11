@@ -81,8 +81,8 @@ def _create_logger(portal_name):
     # Set log level
     portal_logger.setLevel(logging.DEBUG)
     
-    # Create file handler for this portal
-    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+    # Create file handler for this portal with errors='replace' to handle any Unicode issues
+    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8', errors='replace')
     
     # Set formatter
     file_handler.setFormatter(COMMON_FORMATTER)
@@ -124,7 +124,7 @@ class IssuesFilter(logging.Filter):
 
 # Create a shared Issues handler that logs WARNING and ERROR to a central file
 issues_file = os.path.join(LOGS_PATH, "Issues.log")
-issues_handler = logging.FileHandler(issues_file, mode='a', encoding='utf-8')
+issues_handler = logging.FileHandler(issues_file, mode='a', encoding='utf-8', errors='replace')
 issues_handler.setLevel(logging.WARNING)
 issues_handler.addFilter(IssuesFilter())
 issues_handler.setFormatter(ISSUES_FORMATTER)
@@ -160,8 +160,8 @@ def _create_main_execution_logger():
     if main_logger.handlers:
         main_logger.handlers.clear()
     
-    # Create file handler
-    file_handler = logging.FileHandler(main_log_file, mode='a', encoding='utf-8')
+    # Create file handler with errors='replace' to support Unicode/emojis
+    file_handler = logging.FileHandler(main_log_file, mode='a', encoding='utf-8', errors='replace')
     file_handler.setFormatter(COMMON_FORMATTER)
     main_logger.addHandler(file_handler)
     

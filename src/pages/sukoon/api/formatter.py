@@ -19,6 +19,7 @@ import os
 from typing import Dict, List
 from datetime import datetime
 from src.services.formatter_service import expand_empty_tpa_network
+from src.utils.logger import sukoon_logger
 from .mapping import PORTAL_REGION
 
 # Portal name for this formatter
@@ -163,6 +164,8 @@ class SukoonFormatter:
         Returns:
             Path to output file
         """
+        sukoon_logger.info(f"Formatting {len(records)} extraction records...")
+        
         # Ensure directory exists
         os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
         
@@ -170,18 +173,26 @@ class SukoonFormatter:
         for record in records:
             all_rows.extend(self.format_record(record))
         
+        sukoon_logger.debug(f"Formatted into {len(all_rows)} initial database records")
+        
         # Parse rows back to dicts for expansion
         parsed_records = [json.loads(row) for row in all_rows]
         
         # Expand records with empty TPA/Network using shared service
+        sukoon_logger.debug("Expanding empty TPA/Network combinations...")
         expanded_records = expand_empty_tpa_network(parsed_records)
+        
+        sukoon_logger.info(f"After expansion: {len(expanded_records)} total records")
+        sukoon_logger.debug(f"Output file: {self.output_path}")
         
         with open(self.output_path, 'w', encoding='utf-8') as f:
             for record in expanded_records:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                # Use ensure_ascii=True to avoid Unicode encoding issues
+                f.write(json.dumps(record, ensure_ascii=True) + "\n")
         
         self.records_written = len(expanded_records)
-        print(f"\n💾 Saved {self.records_written} database rows to: {self.output_path}")
+        sukoon_logger.info(f"Successfully saved {self.records_written} records to {self.output_path}")
+        print(f"Saved {self.records_written} database rows to: {self.output_path}")
         
         return self.output_path
     

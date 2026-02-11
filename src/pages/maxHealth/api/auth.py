@@ -25,6 +25,8 @@ class MaxHealthAuthToken:
         Returns:
             str: The extracted token or None if not found
         """
+        maxhealth_logger.info("Starting token extraction from browser storage...")
+        
         try:
             # Step 1: Check localStorage
             maxhealth_logger.debug("Checking localStorage for auth token...")
@@ -50,7 +52,7 @@ class MaxHealthAuthToken:
                 if key in local_storage and local_storage[key]:
                     self.token = local_storage[key].strip('"')
                     self.token_type = 'localStorage'
-                    maxhealth_logger.debug(f"Token found in localStorage['{key}']")
+                    maxhealth_logger.info(f"✓ Token found in localStorage['{key}'] (length: {len(self.token)})")
                     return self.token
             
             # Look for JWT-like values in localStorage

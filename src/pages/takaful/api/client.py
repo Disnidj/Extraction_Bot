@@ -48,10 +48,15 @@ class TakafulAPIClient:
             param_str = "&".join([f"{k}={v}" for k, v in params.items()])
             url = f"{url}?{param_str}"
         
+        takaful_logger.debug(f"API Request: GET {url}")
+        
         try:
             async with self.session.get(url, headers=self.auth.get_headers()) as response:
+                takaful_logger.debug(f"  Response status: {response.status}")
+                
                 if response.status == 200:
                     data = await response.json()
+                    takaful_logger.debug(f"  Response received: {len(str(data))} bytes")
                     return data
                 else:
                     takaful_logger.error(f"API request failed: {url} - Status: {response.status}")

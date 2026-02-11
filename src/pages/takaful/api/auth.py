@@ -24,6 +24,8 @@ class TakafulAuthToken:
         Returns:
             str: The extracted JWT token or None if not found
         """
+        takaful_logger.info("Starting token extraction from browser storage...")
+        
         try:
             # Common localStorage keys for Angular auth tokens
             token_keys = [
@@ -36,13 +38,18 @@ class TakafulAuthToken:
                 "id_token"
             ]
             
+            takaful_logger.debug(f"Checking {len(token_keys)} common token keys in localStorage")
+            
             # Try each possible key
             for key in token_keys:
                 token = await page.evaluate(f"localStorage.getItem('{key}')")
                 if token:
                     self.token = token.strip('"')
-                    takaful_logger.debug(f"Token found in localStorage['{key}']")
+                    takaful_logger.info(f"✓ Token found in localStorage['{key}'] (length: {len(self.token)})")
+                    takaful_logger.debug(f"Token format: {self.token[:20]}...{self.token[-20:]}")
                     return self.token
+            
+            takaful_logger.debug("Token not found in common keys, checking all localStorage items...")
             
             # If not found, get ALL localStorage items to find the token
             all_storage = await page.evaluate("""

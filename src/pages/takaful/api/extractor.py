@@ -35,6 +35,10 @@ class TakafulAPIExtractor:
         Returns:
             dict: Complete extraction results
         """
+        takaful_logger.info("="*60)
+        takaful_logger.info("🚀 TAKAFUL API EXTRACTION STARTED")
+        takaful_logger.info("="*60)
+        
         self.results = {
             "portal": "TAKAFUL EMARAT",
             "extracted_at": datetime.now().isoformat(),
@@ -45,6 +49,7 @@ class TakafulAPIExtractor:
         async with TakafulAPIClient(self.auth) as client:
             # Pre-Level: Extract Industry Categories (Business Nature)
             print("\n📥 Pre-Level: Extracting Industry Categories (Business Nature)...")
+            takaful_logger.info("Pre-Level: Extracting Industry Categories (Business Nature)")
             industries = await client.get_industries()
             if industries:
                 # Only include industries where allows="true"
@@ -54,8 +59,10 @@ class TakafulAPIExtractor:
                     if ind.get("allows", "").lower() == "true"
                 ]
                 self.results["industry_categories"] = allowed_industries
+                takaful_logger.info(f"Industry Categories: {len(allowed_industries)} options extracted")
                 print(f"   ✓ Industry Categories: {len(allowed_industries)} options")
             else:
+                takaful_logger.warning("No Industry Categories found")
                 print("   ⚠️ No Industry Categories found")
             
             # Process Dubai only (as per requirements)

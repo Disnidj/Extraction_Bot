@@ -104,3 +104,4 @@ dmypy.json
 
 extracted_data/*
 db_update/*
+reports/*

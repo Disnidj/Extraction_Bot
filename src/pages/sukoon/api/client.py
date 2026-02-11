@@ -99,6 +99,11 @@ class SukoonApiClient:
         
         self.call_count += 1
         
+        sukoon_logger.debug(f"API Call #{self.call_count}: PopulateDDL")
+        sukoon_logger.debug(f"  Payload: indemnityId={indemnity_id}, region={region_name}, productId={product_id}")
+        if network_id:
+            sukoon_logger.debug(f"  NetworkId: {network_id}")
+        
         try:
             # Build headers including cookies from browser context to ensure
             # the API call carries the same session + F5 tokens as the page.
