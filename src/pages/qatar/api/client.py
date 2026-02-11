@@ -39,12 +39,16 @@ class QatarAPIClient:
             list: Industry data
         """
         url = API_ENDPOINTS['industry']
-        qatar_logger.debug(f"Fetching industries: {url}")
+        qatar_logger.debug(f"API Request: GET {url}")
         
         async with self.session.get(url) as response:
+            qatar_logger.debug(f"  Response status: {response.status}")
             data = await response.json()
+            
             if "response" in data:
-                return data.get("response", [])
+                result = data.get("response", [])
+                qatar_logger.debug(f"  Industries received: {len(result)} items")
+                return result
             else:
                 qatar_logger.error(f"Industry API error: {data}")
                 return []

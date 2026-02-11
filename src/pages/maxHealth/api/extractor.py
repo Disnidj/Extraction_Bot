@@ -109,15 +109,22 @@ class MaxHealthExtractor:
         Returns:
             dict: Complete extraction results
         """
+        maxhealth_logger.info("="*60)
+        maxhealth_logger.info("🚀 MAXHEALTH API EXTRACTION STARTED")
+        maxhealth_logger.info("="*60)
+        
         async with MaxHealthAPIClient(self.auth) as client:
             # Step 1: Get case lookups
             print("\n📡 Step 1: Fetching case lookups...")
+            maxhealth_logger.info("Step 1: Fetching case lookups from API")
             lookups = await client.get_case_lookups()
             
             if not lookups or not lookups.get("isSuccess"):
+                maxhealth_logger.error("Failed to fetch case lookups")
                 print("❌ Failed to fetch case lookups")
                 return None
             
+            maxhealth_logger.debug(f"Case lookups received successfully")
             self.results["lookups"] = lookups.get("data", {})
             
             networks = self.results["lookups"].get("networks", [])
@@ -125,6 +132,8 @@ class MaxHealthExtractor:
             states = self.results["lookups"].get("states", [])
             target_groups = self.results["lookups"].get("targetGroups", [])
             client_statuses = self.results["lookups"].get("clientStatuses", [])
+            
+            maxhealth_logger.debug(f"Networks: {len(networks)}, Products: {len(products)}, States: {len(states)}")
             
             # Apply business rule filters
             dubai_states = self._filter_states_to_dubai(states)
@@ -138,6 +147,8 @@ class MaxHealthExtractor:
             
             self.stats["networks"] = len(networks)
             self.stats["products"] = len(products)
+            
+            maxhealth_logger.info(f"Filtered to Dubai only: {len(dubai_states)} locations")
             
             print(f"   ✓ Networks (TPA): {len(networks)}")
             print(f"   ✓ Products (Network): {len(products)}")

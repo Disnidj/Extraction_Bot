@@ -63,11 +63,13 @@ class QatarFormatter:
         if not self.results:
             raise ValueError("No results to format. Load or provide results first.")
         
+        qatar_logger.info("Starting Qatar data formatting...")
         self.output_lines = []
         
         # Pre-Level: Process Industry Categories
         industry_categories = self.results.get("industry_categories", [])
         if industry_categories:
+            qatar_logger.info(f"Processing Industry Categories: {len(industry_categories)} values")
             self._add_rows(
                 tpa="",
                 network="",
@@ -75,17 +77,37 @@ class QatarFormatter:
                 dropdown_name="Industry Categories",
                 values=industry_categories
             )
+            qatar_logger.debug(f"Added {len(industry_categories)} Industry Category records")
         
         # Iterate through the hierarchy: emirates -> tpas -> plans -> benefits
+        qatar_logger.info("Processing hierarchy: Emirates -> TPAs -> Plans -> Benefits")
+        
+        emirate_count = 0
+        tpa_count = 0
+        plan_count = 0
+        
         for emirate_name, emirate_data in self.results.get("emirates", {}).items():
+            emirate_count += 1
+            qatar_logger.debug(f"Processing Emirate: {emirate_name}")
+            
             for tpa_name, tpa_data in emirate_data.get("tpas", {}).items():
+                tpa_count += 1
+                qatar_logger.debug(f"  Processing TPA: {tpa_name}")
+                
                 for plan_name, plan_data in tpa_data.get("plans", {}).items():
+                    plan_count += 1
+                    benefit_count = len(plan_data.get("benefits", {}))
+                    qatar_logger.debug(f"    Processing Plan: {plan_name} ({benefit_count} benefits)")
+                    
                     self._process_plan_benefits(
                         region=emirate_name,
                         tpa=tpa_name,
                         network=plan_name,
                         benefits=plan_data.get("benefits", {})
                     )
+        
+        qatar_logger.info(f"Formatting complete: {emirate_count} Emirates, {tpa_count} TPAs, {plan_count} Plans")
+        qatar_logger.info(f"Total records before expansion: {len(self.output_lines)}")
         
         return self.output_lines
     

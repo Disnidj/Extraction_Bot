@@ -63,11 +63,13 @@ class TakafulFormatter:
         if not self.results:
             raise ValueError("No results to format. Load or provide results first.")
         
+        takaful_logger.info("Starting Takaful data formatting...")
         self.output_lines = []
         
         # Pre-Level: Process Industry Categories (Business Nature)
         industry_categories = self.results.get("industry_categories", [])
         if industry_categories:
+            takaful_logger.info(f"Processing Industry Categories: {len(industry_categories)} values")
             self._add_rows(
                 tpa="",  # No TPA context for pre-level
                 network="",  # No Network context for pre-level
@@ -75,17 +77,37 @@ class TakafulFormatter:
                 dropdown_name="Industry Categories",
                 values=industry_categories
             )
+            takaful_logger.debug(f"Added {len(industry_categories)} Industry Category records")
         
         # Iterate through the hierarchy: emirates -> tpas -> plans -> benefits
+        takaful_logger.info("Processing hierarchy: Emirates -> TPAs -> Plans -> Benefits")
+        
+        emirate_count = 0
+        tpa_count = 0
+        plan_count = 0
+        
         for emirate_name, emirate_data in self.results.get("emirates", {}).items():
+            emirate_count += 1
+            takaful_logger.debug(f"Processing Emirate: {emirate_name}")
+            
             for tpa_name, tpa_data in emirate_data.get("tpas", {}).items():
+                tpa_count += 1
+                takaful_logger.debug(f"  Processing TPA: {tpa_name}")
+                
                 for plan_name, plan_data in tpa_data.get("plans", {}).items():
+                    plan_count += 1
+                    benefit_count = len(plan_data.get("benefits", {}))
+                    takaful_logger.debug(f"    Processing Plan: {plan_name} ({benefit_count} benefits)")
+                    
                     self._process_plan_benefits(
                         region=emirate_name,
                         tpa=tpa_name,
                         network=plan_name,
                         benefits=plan_data.get("benefits", {})
                     )
+        
+        takaful_logger.info(f"Formatting complete: {emirate_count} Emirates, {tpa_count} TPAs, {plan_count} Plans")
+        takaful_logger.info(f"Total records before expansion: {len(self.output_lines)}")
         
         return self.output_lines
     
@@ -188,11 +210,16 @@ class TakafulFormatter:
         if not self.output_lines:
             raise ValueError("No formatted output. Run format_to_text first.")
         
+        takaful_logger.info(f"Saving formatted data: {len(self.output_lines)} records before expansion")
+        
         # Parse JSON lines back to dicts for expansion
         parsed_records = [json.loads(line) for line in self.output_lines]
         
+        takaful_logger.debug("Expanding empty TPA/Network combinations...")
         # Expand records with empty TPA/Network using shared service
         expanded_records = expand_empty_tpa_network(parsed_records)
+        
+        takaful_logger.info(f"After expansion: {len(expanded_records)} total records")
         
         # Save to portal-specific subfolder
         portal_dir = os.path.join(output_dir, "takaful")
@@ -200,12 +227,15 @@ class TakafulFormatter:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(portal_dir, f"takaful_extracted_{timestamp}.txt")
         
+        takaful_logger.debug(f"Output file: {output_file}")
+        
         with open(output_file, "w", encoding="utf-8") as f:
             for record in expanded_records:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                # Use ensure_ascii=True to avoid Unicode encoding issues
+                f.write(json.dumps(record, ensure_ascii=True) + "\n")
         
-        print(f"\n💾 Saved {len(expanded_records)} database rows to: {output_file}")
-        takaful_logger.debug(f"Saved {len(expanded_records)} rows to {output_file}")
+        takaful_logger.info(f"Successfully saved {len(expanded_records)} records to {output_file}")
+        print(f"Saved {len(expanded_records)} database rows to: {output_file}")
         
         return output_file
     

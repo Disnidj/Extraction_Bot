@@ -156,15 +156,47 @@ class ADNICAuth:
             await self.extract_business_nature()
             
             # Fill form fields rapidly
+            adnic_logger.debug("Filling company registration form fields...")
+            
+            adnic_logger.debug("Field: Company Name = 'API Extraction Test Company'")
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_CompanyName"]').fill("API Extraction Test Company")
+            
+            adnic_logger.debug("Field: Business Nature = 'Other Services & Activities'")
             await self.page.locator('//*[@id="ContentPlaceHolder1_ddl_buisnessNature"]').select_option(label="Other Services & Activities")
+            
+            adnic_logger.debug("Field: City = 'Dubai'")
             await self.page.locator('//*[@id="ContentPlaceHolder1_ddl_City"]').select_option("Dubai")
-            await asyncio.sleep(0.8)  # Wait for location field to be ready after city selection
-            await self.page.locator('//*[@id="ContentPlaceHolder1_txt_location"]').fill("Dubai")
+            
+            # Wait for location field to become enabled/editable after city selection
+            adnic_logger.debug("Waiting for location field to become enabled after city selection...")
+            location_field = self.page.locator('//*[@id="ContentPlaceHolder1_txt_location"]')
+            await location_field.wait_for(state="visible", timeout=10000)
+            # Also wait for it to be enabled (not disabled/readonly)
+            await self.page.wait_for_function(
+                "document.getElementById('ContentPlaceHolder1_txt_location').disabled === false",
+                timeout=10000
+            )
+            adnic_logger.debug("Location field is now enabled")
+            
+            # Add extra delay to ensure field is fully ready
+            await asyncio.sleep(3.0)
+            
+            adnic_logger.debug("Field: Location = 'Dubai'")
+            await location_field.fill("Dubai")
+            
+            adnic_logger.debug("Field: Contact Person = 'Test Contact'")
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_contactperson"]').fill("Test Contact")
+            
+            adnic_logger.debug("Field: Contact Number = '0501234567'")
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_ContactNumber"]').fill("0501234567")
+            
+            adnic_logger.debug("Field: Email = 'test@test.com'")
             await self.page.locator('//*[@id="ContentPlaceHolder1_txt_email"]').fill("test@test.com")
+            
+            adnic_logger.debug("Field: Type = 'New'")
             await self.page.locator('//*[@id="ContentPlaceHolder1_ddl_NewRenew"]').select_option("New")
+            
+            adnic_logger.info("All form fields filled successfully")
             print("   ✓ Form fields filled")
             
             # Click NEXT
@@ -280,15 +312,21 @@ class ADNICAuth:
             
             if has_health_questions:
                 print("   📋 Answering health questions...")
+                adnic_logger.debug("Processing health questions...")
+                answered_count = 0
                 # Answer all questions rapidly without individual sleeps
-                for selector in health_questions:
+                for idx, selector in enumerate(health_questions, 1):
                     try:
                         question = self.page.locator(selector)
                         if await question.is_visible(timeout=500):
                             await question.select_option("No")
+                            answered_count += 1
+                            adnic_logger.debug(f"Health question {idx}: Answered 'No'")
                     except:
+                        adnic_logger.debug(f"Health question {idx}: Not found or skipped")
                         pass
                 
+                adnic_logger.info(f"Health questions answered: {answered_count} questions")
                 print("   ✓ Health questions answered")
                 await self.page.locator('//*[@id="ContentPlaceHolder1_btn_submit"]').click()
                 await self.page.wait_for_load_state('networkidle')

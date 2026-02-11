@@ -99,6 +99,7 @@ class SukoonApiExtractor:
             List of Business Nature DropdownOption objects
         """
         print("\n📥 Pre-Level: Extracting Business Nature Options...")
+        sukoon_logger.info("Pre-Level: Extracting Business Nature Options")
         
         if self.business_nature_options:
             # Convert dict format to DropdownOption objects
@@ -118,9 +119,11 @@ class SukoonApiExtractor:
             )
             self.records.append(record)
             
+            sukoon_logger.info(f"Business Nature: {len(options)} options extracted")
             print(f"   ✓ Business Nature: {len(options)} options")
             return options
         else:
+            sukoon_logger.warning("No Business Nature options available")
             print("   ⚠️ No Business Nature options available")
             return []
     

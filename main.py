@@ -32,6 +32,7 @@ from src.pages.sukoon.sukoonmain_api import run_sukoon_api_extraction
 from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
 from src.services.db_service.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
+from src.utils.report_generator import generate_extraction_report
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
 from src.utils.clear_folder import clear_files
@@ -280,6 +281,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
     main_execution_logger.info(f"{'='*70}")
     
     portal_timings = {}
+    portal_results = {}  # Track success/failure for PDF report
     
     # Run extraction for each portal
     for portal in matching_portals:
@@ -289,6 +291,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
         
         portal_start = datetime.now()
         portal_timings[portal['name']] = {'start': portal_start, 'end': None, 'duration': None}
+        portal_results[portal['name']] = {'success': False, 'error': None}
         main_execution_logger.info(f"🚀 Portal '{portal['name']}' - Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
         
         try:
@@ -297,6 +300,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
             portal_duration = portal_end - portal_start
             portal_timings[portal['name']]['end'] = portal_end
             portal_timings[portal['name']]['duration'] = portal_duration
+            portal_results[portal['name']]['success'] = success
             
             if success:
                 print(f"\n✅ {portal['name']} extraction completed!")
@@ -306,6 +310,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
                 )
             else:
                 print(f"\n❌ {portal['name']} extraction failed!")
+                portal_results[portal['name']]['error'] = "Extraction returned False"
                 main_execution_logger.error(
                     f"❌ Portal '{portal['name']}' - Failed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
                     f"Duration: {portal_duration.total_seconds():.2f}s"
@@ -315,13 +320,17 @@ async def run_api_extraction_mode(playwright, selected_companies):
             portal_duration = portal_end - portal_start
             portal_timings[portal['name']]['end'] = portal_end
             portal_timings[portal['name']]['duration'] = portal_duration
+            portal_results[portal['name']]['error'] = str(e)
             
             print(f"\n❌ Error during {portal['name']} extraction: {e}")
             main_execution_logger.error(
                 f"❌ Portal '{portal['name']}' - Error at {portal_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
                 f"Duration: {portal_duration.total_seconds():.2f}s"
             )
+            # Log full traceback for debugging
             import traceback
+            error_traceback = traceback.format_exc()
+            main_execution_logger.error(f"   Traceback:\n{error_traceback}")
             traceback.print_exc()
     
     # Calculate overall duration
@@ -355,7 +364,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
     print("=" * 70)
     
     db_upload_start = datetime.now()
-    success, rows_inserted, upload_msg = upload_to_database(run_output_dir)
+    success, rows_inserted, upload_msg, deletion_details = upload_to_database(run_output_dir)
     db_upload_end = datetime.now()
     db_upload_duration = db_upload_end - db_upload_start
     
@@ -368,6 +377,15 @@ async def run_api_extraction_mode(playwright, selected_companies):
         main_execution_logger.info(f"   Rows inserted: {rows_inserted}")
         main_execution_logger.info(f"   Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
         main_execution_logger.info(f"   Start: {db_upload_start.strftime('%H:%M:%S')} → End: {db_upload_end.strftime('%H:%M:%S')}")
+        
+        # Log deletion details per portal
+        if deletion_details:
+            main_execution_logger.info(f"\n   🗑️ Deletion Details by Portal:")
+            for company, details in deletion_details.items():
+                main_execution_logger.info(f"      • {company}:")
+                main_execution_logger.info(f"         - Rows deleted: {details['rows_deleted']}")
+                main_execution_logger.info(f"         - Dropdown names: {', '.join(details['dropdown_names']) if details['dropdown_names'] else 'None'}")
+        
         main_execution_logger.info(f"{'='*70}\n")
     else:
         print(f"❌ Database upload failed: {upload_msg}")
@@ -378,6 +396,68 @@ async def run_api_extraction_mode(playwright, selected_companies):
         main_execution_logger.error(f"   Error: {upload_msg}")
         main_execution_logger.error(f"   Duration: {db_upload_duration.total_seconds():.2f}s")
         main_execution_logger.error(f"{'='*70}\n")
+
+    # ============================================================
+    # FINAL SUMMARY: Complete Process Duration
+    # ============================================================
+    complete_process_end = datetime.now()
+    total_process_duration = complete_process_end - overall_start_time
+    total_seconds = total_process_duration.total_seconds()
+    total_minutes = int(total_seconds // 60)
+    total_remaining_seconds = int(total_seconds % 60)
+    
+    main_execution_logger.info(f"\n{'='*70}")
+    main_execution_logger.info(f"🏁 COMPLETE PROCESS SUMMARY")
+    main_execution_logger.info(f"{'='*70}")
+    main_execution_logger.info(f"   Total Start Time: {overall_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    main_execution_logger.info(f"   Total End Time: {complete_process_end.strftime('%Y-%m-%d %H:%M:%S')}")
+    main_execution_logger.info(f"   ")
+    main_execution_logger.info(f"   API Extraction: {overall_duration.total_seconds():.2f}s")
+    main_execution_logger.info(f"   Database Upload: {db_upload_duration.total_seconds():.2f}s")
+    main_execution_logger.info(f"   {'─'*66}")
+    main_execution_logger.info(f"   TOTAL DURATION: {total_seconds:.2f}s ({total_minutes}m {total_remaining_seconds}s)")
+    main_execution_logger.info(f"{'='*70}\n")
+    
+    print(f"\n{'='*70}")
+    print(f"🏁 COMPLETE PROCESS FINISHED")
+    print(f"   Total Duration: {total_minutes}m {total_remaining_seconds}s")
+    print(f"{'='*70}\n")
+
+    # ============================================================
+    # GENERATE PDF REPORT
+    # ============================================================
+    print("\n" + "=" * 70)
+    print("📄 PDF REPORT GENERATION")
+    print("=" * 70)
+    
+    try:
+        pdf_path = generate_extraction_report(
+            run_timestamp=run_timestamp,
+            overall_start_time=overall_start_time,
+            overall_end_time=overall_end_time,
+            portal_timings=portal_timings,
+            portal_results=portal_results,
+            db_upload_success=success,
+            db_rows_inserted=rows_inserted,
+            db_upload_duration=db_upload_duration.total_seconds(),
+            db_upload_start=db_upload_start,
+            db_upload_end=db_upload_end,
+            total_duration=total_seconds,
+            output_folder=run_output_dir,
+            portals_processed=[p['name'] for p in matching_portals],
+            deletion_details=deletion_details
+        )
+        print(f"✅ PDF Report generated: {pdf_path}")
+        main_execution_logger.info(f"\n{'='*70}")
+        main_execution_logger.info(f"📄 PDF REPORT GENERATED")
+        main_execution_logger.info(f"{'='*70}")
+        main_execution_logger.info(f"   Report Path: {pdf_path}")
+        main_execution_logger.info(f"{'='*70}\n")
+    except Exception as e:
+        print(f"❌ Failed to generate PDF report: {e}")
+        main_execution_logger.error(f"❌ PDF Report generation failed: {e}")
+        import traceback
+        main_execution_logger.error(f"   Traceback:\n{traceback.format_exc()}")
 
     
 if __name__ == "__main__":

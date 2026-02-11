@@ -80,24 +80,35 @@ class MaxHealthFormatter:
         if not self.results:
             raise ValueError("No results to format. Load or provide results first.")
         
+        maxhealth_logger.info("Starting MaxHealth data formatting...")
         self.output_lines = []
         lookups = self.results.get("lookups", {})
         plans_by_combo = self.results.get("plans_by_combination", {})
         
+        maxhealth_logger.debug(f"Processing {len(plans_by_combo)} TPA+Network combinations")
+        
         # Region is always Dubai (filtered during extraction)
         region = "Dubai"
+        maxhealth_logger.debug(f"Region: {region} (locked)")
         
         # Get Quotation For values (same for all combinations)
         client_statuses = lookups.get("clientStatuses", [])
         quotation_values = [cs.get("title") for cs in client_statuses if cs.get("title")] if client_statuses else []
         
+        maxhealth_logger.debug(f"Quotation For values: {len(quotation_values)} options")
+        
         # ===========================================
         # Output per TPA+Network+Region (all context filled)
         # ===========================================
+        combo_count = 0
         for combo_key, combo_data in plans_by_combo.items():
+            combo_count += 1
             tpa_name = combo_data.get("network_name", "")
             network_name = combo_data.get("product_name", "")
             valid_target_groups = combo_data.get("valid_target_groups", [])
+            
+            maxhealth_logger.debug(f"Processing combo {combo_count}: TPA={tpa_name}, Network={network_name}")
+            maxhealth_logger.debug(f"  Valid target groups: {len(valid_target_groups)} options")
             plans = combo_data.get("plans", [])
             
             # Quotation For

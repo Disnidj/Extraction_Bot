@@ -44,15 +44,22 @@ class QatarAPIExtractor:
         Returns:
             dict: Complete extraction results
         """
+        qatar_logger.info("="*60)
+        qatar_logger.info("🚀 QATAR API EXTRACTION STARTED")
+        qatar_logger.info("="*60)
+        
         async with QatarAPIClient(self.auth) as client:
             # Pre-Level: Extract Industry Categories
             print("\n📥 Pre-Level: Extracting Industry Categories...")
+            qatar_logger.info("Pre-Level: Extracting Industry Categories")
             industries = await client.get_industries()
             if industries:
                 industry_names = [ind["industry_name"] for ind in industries]
                 self.results["industry_categories"] = industry_names
+                qatar_logger.info(f"Industry Categories: {len(industry_names)} options extracted")
                 print(f"   ✓ Industry Categories: {len(industry_names)} options")
             else:
+                qatar_logger.warning("No Industry Categories found")
                 print("   ⚠️ No Industry Categories found")
             
             # Iterate through hardcoded mapping (Dubai only, NAS only)

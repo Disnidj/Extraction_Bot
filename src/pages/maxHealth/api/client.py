@@ -62,14 +62,18 @@ class MaxHealthAPIClient:
         """
         url = f"{self.BASE_URL}/case/case-lookups"
         
-        maxhealth_logger.info(f"Fetching case lookups from {url}")
+        maxhealth_logger.info(f"API Request: GET {url}")
+        maxhealth_logger.debug("Fetching case lookups from API...")
         print(f"\n📡 Calling API: {url}")
         
         try:
             async with self.session.get(url) as response:
+                maxhealth_logger.debug(f"  Response status: {response.status}")
+                
                 if response.status == 200:
                     data = await response.json()
-                    maxhealth_logger.info("Successfully fetched case lookups")
+                    maxhealth_logger.info("✓ Successfully fetched case lookups")
+                    maxhealth_logger.debug(f"  Response data size: {len(str(data))} bytes")
                     return data
                 else:
                     error_text = await response.text()

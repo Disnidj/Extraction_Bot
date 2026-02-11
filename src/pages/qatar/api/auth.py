@@ -25,6 +25,8 @@ class QatarAuthToken:
         Returns:
             str: The extracted JWT token or None if not found
         """
+        qatar_logger.info("Starting token extraction from browser storage...")
+        
         try:
             # Common token keys
             token_keys = [
@@ -37,12 +39,14 @@ class QatarAuthToken:
                 "id_token"
             ]
             
+            qatar_logger.debug(f"Checking {len(token_keys)} common token keys in localStorage")
+            
             # First try localStorage
             for key in token_keys:
                 token = await page.evaluate(f"localStorage.getItem('{key}')")
                 if token:
                     self.token = token.strip('"')
-                    qatar_logger.debug(f"Token found in localStorage['{key}']")
+                    qatar_logger.info(f"✓ Token found in localStorage['{key}'] (length: {len(self.token)})")
                     return self.token
             
             # Try sessionStorage (Qatar might use this instead)
@@ -51,7 +55,7 @@ class QatarAuthToken:
                 token = await page.evaluate(f"sessionStorage.getItem('{key}')")
                 if token:
                     self.token = token.strip('"')
-                    qatar_logger.debug(f"Token found in sessionStorage['{key}']")
+                    qatar_logger.info(f"✓ Token found in sessionStorage['{key}'] (length: {len(self.token)})")
                     print(f"   ✅ Token found in sessionStorage['{key}']")
                     return self.token
             

@@ -296,17 +296,26 @@ class ADNICApiExtractor:
         print("🚀 ADNIC API EXTRACTION - ALL COMBINATIONS")
         print("=" * 60)
         
+        adnic_logger.info("=" * 60)
+        adnic_logger.info("🚀 ADNIC API EXTRACTION STARTED - ALL COMBINATIONS")
+        adnic_logger.info("=" * 60)
+        adnic_logger.debug(f"Business Nature options available: {len(self.business_nature_options)}")
+        
         # Pre-Level: Business Nature options
         await self.extract_business_nature()
         
         # Level 0: Independent options
+        adnic_logger.info("Level 0: Extracting independent options (TPA, Annual Limit, etc.)")
         independent = await self.extract_level_0()
         
         tpa_options = independent.get("GetTPAByProduct", [])
         self.stats["tpa_count"] = len(tpa_options)
         
+        adnic_logger.info(f"Level 0 Complete: Found {len(tpa_options)} TPAs")
+        
         # Level 1-3: Cascading options
         print(f"\n📥 Level 1-3: Processing {len(tpa_options)} TPAs...")
+        adnic_logger.info(f"Level 1-3: Processing {len(tpa_options)} TPAs...")
         
         for tpa_idx, tpa in enumerate(tpa_options, 1):
             print(f"\n{'─' * 50}")
@@ -337,6 +346,12 @@ class ADNICApiExtractor:
         
         # Print summary
         self._print_summary()
+        
+        adnic_logger.info("=" * 60)
+        adnic_logger.info(f"✅ EXTRACTION COMPLETE: {len(self.records)} records extracted")
+        adnic_logger.info(f"Stats: {self.stats['tpa_count']} TPAs, {self.stats['network_count']} Networks, {self.stats['tcover_count']} TCovers")
+        adnic_logger.info(f"Total API calls: {self.client.call_count}")
+        adnic_logger.info("=" * 60)
         
         return self.records
     

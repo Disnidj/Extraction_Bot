@@ -90,6 +90,10 @@ class ADNICApiClient:
         
         self.call_count += 1
         
+        adnic_logger.debug(f"API Call #{self.call_count}: {endpoint}")
+        adnic_logger.debug(f"  Category: {category}")
+        adnic_logger.debug(f"  Dependencies: {known_str if known_str else 'None'}")
+        
         try:
             response = await self.page.request.post(
                 url,
@@ -110,6 +114,10 @@ class ADNICApiClient:
                 )
                 for item in data.get("d", [])
             ]
+            
+            adnic_logger.debug(f"  Response: {len(options)} options received")
+            if options:
+                adnic_logger.debug(f"  Sample: {options[0].name} (value={options[0].value})")
             
             return options
             
