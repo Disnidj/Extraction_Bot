@@ -190,7 +190,7 @@ class ExtractionReportGenerator:
         # === PORTAL-WISE DETAILS ===
         story.append(self._create_section_header("📊 Portal-wise Details"))
         
-        portal_table_data = [['Portal', 'Status', 'Duration', 'Start', 'End']]
+        portal_table_data = [['Portal', 'Status', 'Duration', 'Start', 'End', 'Error']]
         portal_status_colors = []  # Track which rows need color coding
         
         for portal_name in portals_processed:
@@ -209,12 +209,17 @@ class ExtractionReportGenerator:
             start_str = start_time.strftime('%H:%M:%S') if start_time else "N/A"
             end_str = end_time.strftime('%H:%M:%S') if end_time else "N/A"
             
+            # Include brief error message (if any) in the table; keep long details in Error Details section
+            error_msg = result.get('error')
+            error_display = error_msg if error_msg else ''
+            
             portal_table_data.append([
                 portal_name,
                 status,
                 duration_str,
                 start_str,
-                end_str
+                end_str,
+                error_display
             ])
         
         story.append(self._create_portal_table(portal_table_data, portal_status_colors))
@@ -251,36 +256,29 @@ class ExtractionReportGenerator:
         # === DELETION DETAILS BY PORTAL ===
         if deletion_details and db_upload_success:
             story.append(self._create_section_header("🗑️ Deletion Details by Portal"))
-            
-            deletion_table_data = [['Portal', 'Rows Deleted', 'Dropdown Names Deleted']]
-            
+
+            # Table: one row per portal with rows-deleted summary
+            deletion_table_data = [['Portal', 'Rows Deleted']]
             for company, details in deletion_details.items():
-                rows_deleted = details.get('rows_deleted', 0)
-                dropdown_names = details.get('dropdown_names', [])
-                dropdown_names_str = ', '.join(dropdown_names) if dropdown_names else 'None'
-                
-                # Use Paragraph for long text to enable word wrapping
-                dropdown_names_para = Paragraph(
-                    dropdown_names_str,
-                    ParagraphStyle(
-                        name='DropdownText',
-                        parent=self.styles['Normal'],
-                        fontSize=7,
-                        alignment=TA_LEFT,
-                        textColor=colors.HexColor('#2d3748')
-                    )
-                )
-                
-                deletion_table_data.append([
-                    company,
-                    str(rows_deleted),
-                    dropdown_names_para
-                ])
-            
+                deletion_table_data.append([company, str(details.get('rows_deleted', 0))])
+
             story.append(self._create_deletion_table(deletion_table_data))
-            story.append(Spacer(1, 6))
-        
-        # === COMPLETE PROCESS SUMMARY ===
+            story.append(Spacer(1, 4))
+
+            # Full dropdown-name lists rendered as wrapped paragraphs AFTER the table
+            # (allows long lists to flow across pages without creating an oversized table cell)
+            for company, details in deletion_details.items():
+                dropdown_names = details.get('dropdown_names', [])
+                names_text = ', '.join(dropdown_names) if dropdown_names else 'None'
+                story.append(Paragraph(f"<b>{company}:</b> {names_text}", ParagraphStyle(
+                    name='DropdownListPara',
+                    parent=self.styles['Normal'],
+                    fontSize=8,
+                    alignment=TA_LEFT,
+                    textColor=colors.HexColor('#2d3748')
+                )))
+                story.append(Spacer(1, 2))
+
         story.append(self._create_section_header("🏁 Complete Process Summary"))
         
         extraction_duration = (overall_end_time - overall_start_time).total_seconds()
@@ -354,9 +352,10 @@ class ExtractionReportGenerator:
         return table
     
     def _create_portal_table(self, data: List[List[str]], status_colors: List[bool] = None) -> Table:
-        """Create a styled portal details table with color-coded status."""
-        table = Table(data, colWidths=[90, 70, 60, 65, 65])
-        
+        """Create a styled portal details table with color-coded status and error column."""
+        # Added an Error column (last) to show short failure reason
+        table = Table(data, colWidths=[90, 70, 60, 65, 65, 150])
+
         style = [
             # Header row
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d3748')),
@@ -364,15 +363,16 @@ class ExtractionReportGenerator:
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 8),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            
+
             # Data rows
             ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 1), (4, -1), 'CENTER'),
+            ('ALIGN', (5, 1), (5, -1), 'LEFT'),  # Error column left-aligned
             ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]
-        
+
         # Color-code status column based on success/failure
         if status_colors:
             for i, is_success in enumerate(status_colors):
@@ -387,48 +387,49 @@ class ExtractionReportGenerator:
                     style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#fed7d7')))
                     style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor('#c53030')))
                     style.append(('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold'))
-        
-        # Alternate row colors (except status column)
+
+        # Alternate row colors (except status & error columns)
         for i in range(1, len(data)):
             if i % 2 == 0:
                 style.append(('BACKGROUND', (0, i), (0, i), colors.HexColor('#f7fafc')))
-                style.append(('BACKGROUND', (2, i), (-1, i), colors.HexColor('#f7fafc')))
-        
+                style.append(('BACKGROUND', (2, i), (4, i), colors.HexColor('#f7fafc')))
+
         table.setStyle(TableStyle(style))
         return table
     
     def _create_deletion_table(self, data: List) -> Table:
-        """Create a styled deletion details table with proper text wrapping."""
-        # Wider column for dropdown names to accommodate wrapping
-        table = Table(data, colWidths=[80, 60, 210])
-        
+        """Create a compact deletion-summary table (one row per portal).
+
+        This table intentionally only shows `Portal` and `Rows Deleted` so the full
+        dropdown-name lists can be rendered separately as wrapped paragraphs that
+        may span pages safely.
+        """
+        table = Table(data, colWidths=[220, 80])
+
         style = [
             # Header row
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#744210')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            
-            # Data rows - company and rows_deleted columns
-            ('FONTSIZE', (0, 1), (1, -1), 7),
-            ('ALIGN', (0, 1), (1, -1), 'CENTER'),
-            ('VALIGN', (0, 1), (1, -1), 'MIDDLE'),
-            
-            # Dropdown names column (wrapping enabled via Paragraph)
-            ('VALIGN', (2, 1), (2, -1), 'TOP'),
-            
+
+            # Data rows
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (1, -1), 'CENTER'),
+            ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
+
             # Borders and padding
-            ('PADDING', (0, 0), (1, -1), 4),
-            ('PADDING', (2, 0), (2, -1), 6),
+            ('PADDING', (0, 0), (-1, -1), 6),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
         ]
-        
+
         # Alternate row colors
         for i in range(1, len(data)):
             if i % 2 == 0:
                 style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fffaf0')))
-        
+
         table.setStyle(TableStyle(style))
         return table
     
