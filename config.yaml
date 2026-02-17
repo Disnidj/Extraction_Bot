@@ -41,6 +41,13 @@ orient:
   password: "Unitrust@2025"
   quotation_download_dir: "company_data/orient/quotation_sheets"
 
+orient_aura:
+  email: "broker@life.com"
+  password: "Lifecare@2026"
+  quotation_download_dir: "company_data/orient_aura/quotation_sheets"
+  generated_census_dir: "company_data/orient_aura/generated_census"
+  templates_dir: "company_data/orient_aura/templates"
+
 dni:
   email: "renjith@unitrustib.com"
   password: "Unitrust@2025"

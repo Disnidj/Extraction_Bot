@@ -188,6 +188,7 @@ sukoon_logger = _create_logger("sukoon")
 takaful_logger = _create_logger("takaful")
 # union_logger = _create_logger("union")
 orient_logger = _create_logger("orient")
+orient_aura_logger = _create_logger("orient_aura")
 rak_logger = _create_logger("rak")
 fidelity_logger = _create_logger("fidelity")
 # salama_logger = _create_logger("salama")
@@ -201,7 +202,7 @@ gig_logger = _create_logger("gig")
 for _logger in [
     alsagr_logger, adnic_logger, dni_logger, dubaiinsurance_logger,
     ison_logger, maxhealth_logger, nlg_logger, qatar_logger, sukoon_logger,
-    takaful_logger, orient_logger, rak_logger, fidelity_logger, 
+    takaful_logger, orient_logger, orient_aura_logger, rak_logger, fidelity_logger, 
     wataniatakaful_logger, medgulf_logger, alittihad_logger, daman_logger, gig_logger
 ]:
     try:

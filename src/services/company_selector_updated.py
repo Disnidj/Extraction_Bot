@@ -31,7 +31,8 @@ COMPANY_MAPPING = {
     15: "Fidelity United",
     16: "Daman Insurance",
     17: "RAK INSURANCE",
-    18: "MaxHealth"
+    18: "MaxHealth",
+    19: "Orient Aura"
 }
 
 # Mapping between company names and portal function names
@@ -53,7 +54,8 @@ COMPANY_TO_FUNCTION_MAPPING = {
     "Fidelity United": "Fidelity",
     "Daman Insurance": "Daman",
     "RAK INSURANCE": "RAK",
-    "MaxHealth": "MaxHealth"
+    "MaxHealth": "MaxHealth",
+    "Orient Aura": "Orient Aura"
 }
 
 

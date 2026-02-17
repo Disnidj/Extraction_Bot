@@ -50,6 +50,12 @@ ALSAGR_TEMPLATES_DIR = config['alsagr']['templates_dir']
 ORIENT_EMIAL = config['orient']['email']
 ORIENT_PASSWORD = config['orient']['password']
 ORIENT_QUOTATION_DIR = config['orient']['quotation_download_dir']
+
+ORIENT_AURA_EMAIL = config['orient_aura']['email']
+ORIENT_AURA_PASSWORD = config['orient_aura']['password']
+ORIENT_AURA_QUOTATION_DIR = config['orient_aura']['quotation_download_dir']
+ORIENT_AURA_GENERATED_CENSUS_DIR = config['orient_aura']['generated_census_dir']
+ORIENT_AURA_TEMPLATES_DIR = config['orient_aura']['templates_dir']
  
 RAK_EMAIL = config['rak']['email']
 RAK_PASSWORD = config['rak']['password']

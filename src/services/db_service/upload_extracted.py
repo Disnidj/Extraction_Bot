@@ -32,6 +32,7 @@ COMPANY_NAME_MAPPING = {
     "Takaful": "TAKAFUL EMARAT",
     "ADNIC": "ADNIC",
     "MaxHealth": "MaxHealth",
+    "Orient Aura": "ORIENT INSURANCE",  # Orient Aura API extraction
     # Add other portals as needed
 }
 

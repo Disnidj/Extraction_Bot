@@ -30,6 +30,7 @@ from src.pages.takaful.takafulmain_api import run_takaful_api_extraction
 from src.pages.qatar.qatar_main_api import run_qatar_api_extraction
 from src.pages.sukoon.sukoonmain_api import run_sukoon_api_extraction
 from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
+from src.pages.orient_aura.orient_aura_main_api import run_orient_aura_api_extraction
 from src.services.db_service.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
 from src.services.extraction_report.report_generator import generate_extraction_report
@@ -88,6 +89,7 @@ API_PORTAL_GROUPS = {
         {"function": run_qatar_api_extraction, "name": "QATAR"},
         {"function": run_maxhealth_api_extraction, "name": "MaxHealth"},
         {"function": run_sukoon_api_extraction, "name": "Sukoon"},
+        {"function": run_orient_aura_api_extraction, "name": "Orient Aura"},
     ]
 }
 
