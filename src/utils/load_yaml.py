@@ -56,6 +56,12 @@ ORIENT_AURA_PASSWORD = config['orient_aura']['password']
 ORIENT_AURA_QUOTATION_DIR = config['orient_aura']['quotation_download_dir']
 ORIENT_AURA_GENERATED_CENSUS_DIR = config['orient_aura']['generated_census_dir']
 ORIENT_AURA_TEMPLATES_DIR = config['orient_aura']['templates_dir']
+
+NLGI_AURA_EMAIL = config['nlgi_aura']['email']
+NLGI_AURA_PASSWORD = config['nlgi_aura']['password']
+NLGI_AURA_QUOTATION_DIR = config['nlgi_aura']['quotation_download_dir']
+NLGI_AURA_GENERATED_CENSUS_DIR = config['nlgi_aura']['generated_census_dir']
+NLGI_AURA_TEMPLATES_DIR = config['nlgi_aura']['templates_dir']
  
 RAK_EMAIL = config['rak']['email']
 RAK_PASSWORD = config['rak']['password']

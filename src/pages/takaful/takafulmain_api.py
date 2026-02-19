@@ -26,13 +26,10 @@ async def login_and_get_token(playwright: Playwright):
     page = await context.new_page()
     
     try:
-        # Login using existing LoginPage
+        # Login using LoginPage with retry logic (handles 90s timeout internally)
         login_page = LoginPage(page)
         await login_page.login()
         takaful_logger.debug("Login completed")
-        
-        # Wait for dashboard to ensure login is complete
-        await page.wait_for_selector('text="Create new quote"', timeout=30000)
         
         # Extract token
         auth = TakafulAuthToken()

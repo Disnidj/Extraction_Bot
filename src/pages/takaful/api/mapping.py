@@ -1,55 +1,55 @@
 """
 Takaful Portal Mapping Configuration
-Hardcoded mapping of Emirates, TPAs, and Plans for Dubai.
-Excludes Aafiya Ebp as requested.
+Updated to follow Orient Aura/Qatar pattern with dynamic API calls.
+
+Group: SME Medical (ID: 32)
+Version ID: 28
+Region: Dubai only
 """
 
-# ============================================================================# PORTAL CONSTANTS
+# ============================================================================
+# PORTAL CONSTANTS
 # ============================================================================
 
+PORTAL_NAME = "TAKAFUL EMARAT"
 PORTAL_REGION = "Dubai"  # Default region for all records
+GROUP_NAME = "SME Medical"  # Hardcoded group name
 
-# ============================================================================# HARDCODED MAPPING - Dubai Only, Excluding Aafiya Ebp
+# ============================================================================
+# HARDCODED MAPPING - Takaful SME Medical Configuration
 # ============================================================================
 
 TAKAFUL_MAPPING = {
-    "group_id": 31,
-    "emirates": {
-        "Dubai": {
-            "emirates_id": "84",
-            "emirates_master_id": "84",
-            "tpas": {
-                "Aafiya": {
-                    "tpa_id": "386",
-                    "reinsurer_company_id": 2
-                },
-                # "Aafiya Ebp" excluded as requested (tpa_id: 385)
-                "Mednet": {
-                    "tpa_id": "387",
-                    "reinsurer_company_id": 2
-                },
-                "Nas": {
-                    "tpa_id": "388",
-                    "reinsurer_company_id": 2
-                },
-                "Nextcare": {
-                    "tpa_id": "389",
-                    "reinsurer_company_id": 2
-                }
-            }
-        }
+    "portal_name": "TAKAFUL EMARAT",
+    "version_id": 28,  # Used to call group API
+    
+    # Group configuration - only group_name is hardcoded
+    # group_id will be fetched from API by matching group_name
+    "group": {
+        "group_name": "SME Medical"  # Target group to find in API response
     }
 }
 
-# API Base URLs
+# ============================================================================
+# API CONFIGURATION
+# ============================================================================
+
 API_BASE_URL = "https://smehealth-api.aurainsure.tech"
 PORTAL_BASE_URL = "https://smehealth.aurainsure.tech"
 
-# API Endpoints
+# API Endpoints (same pattern as Orient Aura/Qatar)
 ENDPOINTS = {
+    "industry": "/quotes/generate/industry",
+    "group": "/quotes/generate/group/{version_id}",  # Group endpoint
     "emirates": "/quotes/generate/emirates",
     "tpa": "/quotes/generate/tpa",
     "plan": "/quotes/generate/plan",
-    "benefits": "/quotes/generate/benefits",
-    "industry": "/quotes/generate/industry"
+    "benefits": "/quotes/generate/benefits"
+}
+
+# Additional headers required for Takaful (takafulemarat insurer)
+CUSTOM_HEADERS = {
+    "insurerurl": "takafulemarat",
+    "reinsurername": "peakre",
+    "client_code": "null"
 }

@@ -98,6 +98,31 @@ class MaxHealthFormatter:
         maxhealth_logger.debug(f"Quotation For values: {len(quotation_values)} options")
         
         # ===========================================
+        # Collect all unique TPAs and Networks for dropdown records
+        # These will have empty TPA/Network columns so they get expanded
+        # ===========================================
+        all_tpas = set()
+        all_networks = set()
+        
+        for combo_data in plans_by_combo.values():
+            tpa_name = combo_data.get("network_name", "")
+            network_name = combo_data.get("product_name", "")
+            if tpa_name:
+                all_tpas.add(tpa_name)
+            if network_name:
+                all_networks.add(network_name)
+        
+        # Add TPA dropdown with empty TPA/Network so it gets expanded
+        if all_tpas:
+            self._add_rows("", "", region, "TPA", list(all_tpas))
+            maxhealth_logger.debug(f"Added TPA dropdown: {len(all_tpas)} unique TPAs")
+        
+        # Add Network dropdown with empty TPA/Network so it gets expanded
+        if all_networks:
+            self._add_rows("", "", region, "Network", list(all_networks))
+            maxhealth_logger.debug(f"Added Network dropdown: {len(all_networks)} unique Networks")
+        
+        # ===========================================
         # Output per TPA+Network+Region (all context filled)
         # ===========================================
         combo_count = 0

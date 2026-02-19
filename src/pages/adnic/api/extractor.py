@@ -44,6 +44,7 @@ class ADNICApiExtractor:
         self.client = ADNICApiClient(page)
         self.records: List[Dict] = []
         self.business_nature_options = business_nature_options or []
+        self.all_networks: set = set()  # Collect all unique networks across TPAs
         self.stats = {
             "tpa_count": 0,
             "network_count": 0,
@@ -170,13 +171,10 @@ class ADNICApiExtractor:
                 tpa.value
             )
             
-            # Create record
-            record = self._create_record(
-                api["display_name"],
-                [o.name for o in options],
-                tpa=tpa.name
-            )
-            self.records.append(record)
+            # Collect all unique networks (don't create records per TPA)
+            # Will create single Network dropdown with empty TPA/Network at end
+            for opt in options:
+                self.all_networks.add(opt.name)
             
             if api["endpoint"] == "GetNetworkTPA":
                 networks = options
@@ -340,6 +338,17 @@ class ADNICApiExtractor:
                 
                 for tcover in tcovers:
                     await self.extract_level_3(tpa, network, tcover)
+        
+        # Add Network dropdown with empty TPA/Network so it gets expanded
+        if self.all_networks:
+            network_record = self._create_record(
+                "Network Type",
+                list(self.all_networks),
+                tpa="",    # Empty so it gets expanded
+                network=""  # Empty so it gets expanded
+            )
+            self.records.append(network_record)
+            print(f"\n   ✓ Added Network Type dropdown: {len(self.all_networks)} unique networks")
         
         # Update stats
         self.stats["records_count"] = len(self.records)

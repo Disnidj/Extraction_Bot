@@ -46,6 +46,7 @@ class SukoonApiExtractor:
         self.client = SukoonApiClient(page)
         self.records: List[Dict] = []
         self.business_nature_options = business_nature_options or []
+        self.all_networks: set = set()  # Collect all unique networks across TPAs
         self.stats = {
             "regions_count": 0,
             "indemnity_count": 0,
@@ -173,6 +174,18 @@ class SukoonApiExtractor:
         for region in regions:
             await self._extract_region(region)
         
+        # Add Network dropdown with empty TPA/Network so it gets expanded
+        if self.all_networks:
+            network_record = self._create_record(
+                "Network",
+                list(self.all_networks),
+                region="Dubai",  # Default region
+                tpa="",         # Empty so it gets expanded
+                network=""      # Empty so it gets expanded
+            )
+            self.records.append(network_record)
+            print(f"\n   ✓ Added Network dropdown: {len(self.all_networks)} unique networks")
+        
         # Update stats
         self.stats["records_count"] = len(self.records)
         
@@ -250,15 +263,11 @@ class SukoonApiExtractor:
             # Get network options for this TPA
             network_options = all_options.get("IndemnityNetwork", [])
             
-            # Record the network options list for this TPA
+            # Collect all unique networks (don't create records per TPA)
+            # Will create single Network dropdown with empty TPA/Network at end
             if network_options:
-                record = self._create_record(
-                    "Network",
-                    [opt.text for opt in network_options],
-                    region=region,
-                    tpa=indemnity.text
-                )
-                self.records.append(record)
+                for opt in network_options:
+                    self.all_networks.add(opt.text)
                 print(f"      📋 Networks available: {len(network_options)}")
             
             # ═══════════════════════════════════════════════════════

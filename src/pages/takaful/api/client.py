@@ -1,11 +1,12 @@
 """
 Takaful API Client
 Handles all HTTP requests to Takaful API endpoints.
+Updated to follow Orient Aura/Qatar pattern with get_groups() method.
 """
 
 import aiohttp
 from src.utils.logger import takaful_logger
-from .mapping import API_BASE_URL, ENDPOINTS
+from .mapping import API_BASE_URL, ENDPOINTS, TAKAFUL_MAPPING
 
 
 class TakafulAPIClient:
@@ -65,12 +66,43 @@ class TakafulAPIClient:
             takaful_logger.error(f"API request error: {url} - {e}")
             return None
     
+    async def get_industries(self):
+        """
+        Fetch industry categories (Business Nature).
+        
+        Returns:
+            list: Industry data or empty list
+        """
+        data = await self._get(ENDPOINTS["industry"])
+        if data:
+            return data.get("response", [])
+        return []
+    
+    async def get_groups(self, version_id=28):
+        """
+        Fetch available groups for Takaful portal from API.
+        
+        Args:
+            version_id: Version ID (default: 28 for Takaful)
+            
+        Returns:
+            list: Group data from API or empty list
+        """
+        endpoint = ENDPOINTS["group"].format(version_id=version_id)
+        takaful_logger.debug(f"Fetching groups for version {version_id}...")
+        data = await self._get(endpoint)
+        if data:
+            groups = data.get("response", [])
+            takaful_logger.debug(f"Found {len(groups)} groups from API")
+            return groups
+        return []
+    
     async def get_emirates(self, group_id):
         """
         Fetch emirates for a group.
         
         Args:
-            group_id: Group ID (e.g., 31)
+            group_id: Group ID (e.g., 32)
             
         Returns:
             list: Emirates data or empty list
@@ -85,7 +117,7 @@ class TakafulAPIClient:
         Fetch TPAs for an emirate.
         
         Args:
-            emirates_id: Emirates ID (e.g., "84,84,84...")
+            emirates_id: Emirates ID (e.g., "87,87,87...")
             
         Returns:
             list: TPA data or empty list
@@ -95,31 +127,18 @@ class TakafulAPIClient:
             return data.get("response", [])
         return []
     
-    async def get_industries(self):
-        """
-        Fetch industry categories (Business Nature).
-        
-        Returns:
-            list: Industry data or empty list
-        """
-        data = await self._get(ENDPOINTS["industry"])
-        if data:
-            return data.get("response", [])
-        return []
-    
     async def get_plans(self, tpa_id):
         """
         Fetch plans for a TPA.
         
         Args:
-            tpa_id: TPA ID (e.g., "386")
+            tpa_id: TPA ID (e.g., "403")
             
         Returns:
             list: Plans data or empty list
         """
         # API expects repeated tpa_id format
-        tpa_param = ",".join([str(tpa_id)] * 5)
-        data = await self._get(ENDPOINTS["plan"], {"tpaId": tpa_param})
+        data = await self._get(ENDPOINTS["plan"], {"tpaId": tpa_id})
         if data:
             return data.get("response", [])
         return []
@@ -129,7 +148,7 @@ class TakafulAPIClient:
         Fetch benefit dropdown values for a plan.
         
         Args:
-            plan_id: Plan ID (e.g., 2422)
+            plan_id: Plan ID (e.g., 2527)
             reinsurer_company_id: Reinsurer company ID (e.g., 2)
             
         Returns:

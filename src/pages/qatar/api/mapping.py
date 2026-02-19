@@ -1,41 +1,55 @@
 """
 Qatar Insurance Portal Mapping Configuration
-Hardcoded values for Dubai region and NAS TPA only.
+Updated to follow Orient Aura pattern with dynamic API calls.
+
+Group: SME NAS (ID: 281)
+Region: Dubai only
+TPA: NAS
 """
-# Default region for all records
-PORTAL_REGION = "Dubai"
-# Qatar uses group_id 272
+
+# ============================================================================
+# PORTAL CONSTANTS
+# ============================================================================
+
+PORTAL_NAME = "QATAR INSURANCE CO"
+PORTAL_REGION = "Dubai"  # Default region for all records
+GROUP_NAME = "SME NAS"  # Hardcoded group name
+
+# ============================================================================
+# HARDCODED MAPPING - Qatar SME NAS Configuration
+# ============================================================================
+
 QATAR_MAPPING = {
     "portal_name": "QATAR INSURANCE CO",
-    "group_id": 272,
-    "reinsurer_company_id": 7,
-    "reinsurer_company_name": "icici-ri",
+    "version_id": 50,  # Used to call group API
     
-    # Only Dubai emirate
-    "emirates": {
-        "Dubai": {
-            "emirates_id": "861,861,861,861,861,861",
-            "group_id": "272,272,272,272,272,272",
-            "reinsurer_company_id": "7,7,7,7,7,7",
-            
-            # Only NAS TPA
-            "tpas": {
-                "NAS": {
-                    "tpa_id": "990,990,990,990,990,990",
-                    "reinsurer_company_id": 7
-                }
-            }
-        }
+    # Group configuration - only group_name is hardcoded
+    # group_id will be fetched from API by matching group_name
+    "group": {
+        "group_name": "SME NAS"  # Target group to find in API response
     }
 }
 
-# API endpoints (same base as Takaful - Aura platform)
-API_BASE_URL = "https://smehealth-api.aurainsure.tech"
+# ============================================================================
+# API CONFIGURATION
+# ============================================================================
 
-API_ENDPOINTS = {
-    "emirates": f"{API_BASE_URL}/quotes/generate/emirates",
-    "tpa": f"{API_BASE_URL}/quotes/generate/tpa", 
-    "plan": f"{API_BASE_URL}/quotes/generate/plan",
-    "benefits": f"{API_BASE_URL}/quotes/generate/benefits",
-    "industry": f"{API_BASE_URL}/quotes/generate/industry"
+API_BASE_URL = "https://smehealth-api.aurainsure.tech"
+PORTAL_BASE_URL = "https://smehealth.aurainsure.tech"
+
+# API Endpoints (same pattern as Orient Aura)
+ENDPOINTS = {
+    "industry": "/quotes/generate/industry",
+    "group": "/quotes/generate/group/{version_id}",  # Group endpoint
+    "emirates": "/quotes/generate/emirates",
+    "tpa": "/quotes/generate/tpa",
+    "plan": "/quotes/generate/plan",
+    "benefits": "/quotes/generate/benefits"
+}
+
+# Additional headers required for Qatar (qic insurer)
+CUSTOM_HEADERS = {
+    "insurerurl": "qic",
+    "reinsurername": "icici",
+    "client_code": "null"
 }

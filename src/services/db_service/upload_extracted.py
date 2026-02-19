@@ -32,7 +32,8 @@ COMPANY_NAME_MAPPING = {
     "Takaful": "TAKAFUL EMARAT",
     "ADNIC": "ADNIC",
     "MaxHealth": "MaxHealth",
-    "Orient Aura": "ORIENT INSURANCE",  # Orient Aura API extraction
+    "Orient Aura": "Orient Aura",  # Orient Aura API extraction
+    "NLGI Aura": "Liva Globalcare",  # NLGI Aura API extraction
     # Add other portals as needed
 }
 
@@ -60,7 +61,7 @@ def load_dropdown_mappings(db, company: str) -> Dict[str, str]:
     Load dropdown name mappings from Medical_CTN_Portal_Field_Mapping.
     
     Maps portal-specific dropdown names to standard database names.
-    Example: "Quotation For" (MaxHealth) -> "Quotation_For" (standard)
+    Example: "Dental Benefit" (Liva Globalcare) -> "Dental" (standard)
     
     Args:
         db: Database connection
@@ -73,7 +74,7 @@ def load_dropdown_mappings(db, company: str) -> Dict[str, str]:
     
     try:
         # Query to get mappings for this company
-        # Column name is the company name (e.g., MaxHealth, Sukoon, Qatar)
+        # Column name is the company name (e.g., MaxHealth, Sukoon, Qatar, Liva Globalcare)
         query = f"""
             SELECT `{company}`, Dropdown_Name 
             FROM {MAPPING_TABLE}
@@ -83,8 +84,16 @@ def load_dropdown_mappings(db, company: str) -> Dict[str, str]:
         
         if rows:
             for row in rows:
-                portal_name = row.get(company, "")
+                # Try both exact column name and stripped version
+                portal_name = row.get(company, "") or row.get(company.strip(), "")
                 standard_name = row.get("Dropdown_Name", "")
+                
+                # Strip whitespace from both values
+                if portal_name:
+                    portal_name = portal_name.strip()
+                if standard_name:
+                    standard_name = standard_name.strip()
+                    
                 if portal_name and standard_name:
                     mappings[portal_name] = standard_name
                     
@@ -93,11 +102,13 @@ def load_dropdown_mappings(db, company: str) -> Dict[str, str]:
     except Exception as e:
         print(f"   ⚠️ Could not load mappings for {company}: {e}")
         print(f"   → Will use original dropdown names")
+        import traceback
+        traceback.print_exc()
     
     return mappings
 
 
-def apply_dropdown_mapping(records: List[Dict], mappings: Dict[str, str]) -> Tuple[int, int]:
+def apply_dropdown_mapping(records: List[Dict], mappings: Dict[str, str]) -> Tuple[int, int, Dict[str, str], set]:
     """
     Apply dropdown name mappings to records.
     
@@ -106,25 +117,38 @@ def apply_dropdown_mapping(records: List[Dict], mappings: Dict[str, str]) -> Tup
         mappings: Dict mapping {portal_dropdown_name: standard_dropdown_name}
         
     Returns:
-        Tuple of (mapped_count, unmapped_count)
+        Tuple of (mapped_count, unmapped_count, applied_mappings, unmapped_names)
+        - applied_mappings: Dict of {portal_name: db_name} that were actually applied
+        - unmapped_names: Set of dropdown names that had no mapping
     """
     mapped_count = 0
     unmapped_count = 0
     unmapped_names = set()
+    applied_mappings = {}  # Track which mappings were actually used
     
     for record in records:
         original_name = record.get("Dropdown_Name", "")
+        # Try with stripped value
+        original_name_stripped = original_name.strip() if original_name else ""
+        
         if original_name in mappings:
-            record["Dropdown_Name"] = mappings[original_name]
+            new_name = mappings[original_name]
+            record["Dropdown_Name"] = new_name
             mapped_count += 1
+            # Track the mapping (only add once per unique original name)
+            if original_name not in applied_mappings:
+                applied_mappings[original_name] = new_name
+        elif original_name_stripped in mappings:
+            new_name = mappings[original_name_stripped]
+            record["Dropdown_Name"] = new_name
+            mapped_count += 1
+            if original_name_stripped not in applied_mappings:
+                applied_mappings[original_name_stripped] = new_name
         else:
             unmapped_count += 1
             unmapped_names.add(original_name)
     
-    if unmapped_names:
-        print(f"   ⚠️ Unmapped dropdown names: {', '.join(unmapped_names)}")
-    
-    return mapped_count, unmapped_count
+    return mapped_count, unmapped_count, applied_mappings, unmapped_names
 
 
 def parse_extracted_file(file_path: str) -> List[Dict]:
@@ -239,10 +263,12 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         all_records = []
         total_mapped = 0
         total_unmapped = 0
-        all_unmapped_names = set()
+        all_applied_mappings = {}  # {company: {portal_name: db_name}}
+        all_unmapped_names = {}    # {company: set of unmapped names}
         
         # Dropdown names to skip (hierarchy fields and unwanted fields)
-        SKIP_DROPDOWN_NAMES = {"", "TPA", "Network"}
+        # Note: TPA and Network are now added as proper Dropdown_Name records that should be inserted
+        SKIP_DROPDOWN_NAMES = {""}
         
         for company, records in records_by_company.items():
             print(f"\n   📋 {company}:")
@@ -261,12 +287,16 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
             # Apply mapping only to filtered records
             mappings = load_dropdown_mappings(db, company)
             if mappings:
-                mapped, unmapped = apply_dropdown_mapping(filtered_records, mappings)
+                mapped, unmapped, applied_mappings, unmapped_names = apply_dropdown_mapping(filtered_records, mappings)
                 total_mapped += mapped
                 total_unmapped += unmapped
+                all_applied_mappings[company] = applied_mappings
+                all_unmapped_names[company] = unmapped_names
                 print(f"      • Mapped: {mapped}, Unmapped: {unmapped}")
             else:
                 print(f"      • No mappings found, using original names")
+                all_applied_mappings[company] = {}
+                all_unmapped_names[company] = set(r.get("Dropdown_Name", "") for r in filtered_records)
             
             # Note: TPA/Network expansion is now done in the formatter when writing the txt file
             # No need to expand here anymore
@@ -276,12 +306,40 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         # Get unique dropdown names being inserted
         unique_dropdowns = set(r.get("Dropdown_Name", "") for r in all_records if r.get("Dropdown_Name", ""))
         
-        print(f"\n   {'='*50}")
+        # Display mapping details per company
+        print(f"\n   {'='*70}")
+        print(f"   📊 DROPDOWN MAPPING DETAILS")
+        print(f"   {'='*70}")
+        
+        for company, applied_mappings in all_applied_mappings.items():
+            if applied_mappings:
+                print(f"\n   🏢 {company} - Applied Mappings ({len(applied_mappings)}):")
+                print(f"      {'Portal Field Name':<45} → {'Database Field Name':<30}")
+                print(f"      {'-'*45}   {'-'*30}")
+                for portal_name, db_name in sorted(applied_mappings.items()):
+                    # Truncate long names for display
+                    portal_display = (portal_name[:42] + '...') if len(portal_name) > 45 else portal_name
+                    db_display = (db_name[:27] + '...') if len(db_name) > 30 else db_name
+                    print(f"      {portal_display:<45} → {db_display:<30}")
+            else:
+                print(f"\n   🏢 {company} - No mappings applied")
+            
+            # Show unmapped names (limited to first 10)
+            unmapped = all_unmapped_names.get(company, set())
+            if unmapped:
+                print(f"\n      ⚠️ Unmapped fields ({len(unmapped)}):")
+                for i, name in enumerate(sorted(unmapped)[:10]):
+                    name_display = (name[:60] + '...') if len(name) > 60 else name
+                    print(f"         • {name_display}")
+                if len(unmapped) > 10:
+                    print(f"         ... and {len(unmapped) - 10} more")
+        
+        print(f"\n   {'='*70}")
         print(f"   📊 MAPPING TOTALS:")
         print(f"      • Total mapped: {total_mapped}")
         print(f"      • Total unmapped: {total_unmapped}")
         print(f"      • Unique dropdown fields to insert: {len(unique_dropdowns)}")
-        print(f"   {'='*50}")
+        print(f"   {'='*70}")
         
         db.connection.autocommit = False  # Start transaction
         
@@ -382,7 +440,13 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         print(f"   🕐 End Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"=" * 70)
         
-        return True, rows_inserted, f"Successfully uploaded {rows_inserted} records in {minutes}m {seconds:.2f}s", deletion_details
+        # Build mapping details for report
+        mapping_details = {
+            'applied_mappings': all_applied_mappings,  # {company: {portal_name: db_name}}
+            'unmapped_names': {k: list(v) for k, v in all_unmapped_names.items()}  # Convert sets to lists
+        }
+        
+        return True, rows_inserted, f"Successfully uploaded {rows_inserted} records in {minutes}m {seconds:.2f}s", deletion_details, mapping_details
         
     except Exception as e:
         upload_duration = time.time() - upload_start_time
@@ -391,7 +455,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         print(f"   ⏱️  Duration before failure: {upload_duration:.2f}s")
         if db.connection:
             db.connection.rollback()
-        return False, 0, f"Upload failed: {str(e)}", {}
+        return False, 0, f"Upload failed: {str(e)}", {}, {}
         
     finally:
         db.disconnect()

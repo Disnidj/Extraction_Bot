@@ -103,7 +103,8 @@ class ExtractionReportGenerator:
         total_duration: float,
         output_folder: str,
         portals_processed: List[str],
-        deletion_details: Dict = None
+        deletion_details: Dict = None,
+        mapping_details: Dict = None
     ) -> str:
         """
         Generate the extraction report PDF.
@@ -123,6 +124,7 @@ class ExtractionReportGenerator:
             output_folder: Path to extracted data folder
             portals_processed: List of portal names processed
             deletion_details: Dict with deletion info per portal {company: {rows_deleted, dropdown_names}}
+            mapping_details: Dict with mapping info {applied_mappings: {company: {portal_name: db_name}}, unmapped_names: {company: [names]}}
             
         Returns:
             str: Path to generated PDF report
@@ -279,6 +281,68 @@ class ExtractionReportGenerator:
                 )))
                 story.append(Spacer(1, 2))
 
+        # === DROPDOWN MAPPING DETAILS BY PORTAL ===
+        if mapping_details and mapping_details.get('applied_mappings') and db_upload_success:
+            story.append(self._create_section_header("🔄 Dropdown Mapping Details by Portal"))
+            
+            applied_mappings = mapping_details.get('applied_mappings', {})
+            unmapped_names = mapping_details.get('unmapped_names', {})
+            
+            for company, mappings in applied_mappings.items():
+                if mappings:
+                    # Company header
+                    story.append(Paragraph(
+                        f"<b>📋 {company}</b> - {len(mappings)} mappings applied",
+                        ParagraphStyle(
+                            name='MappingCompanyHeader',
+                            parent=self.styles['Normal'],
+                            fontSize=9,
+                            textColor=colors.HexColor('#2b6cb0'),
+                            spaceBefore=6,
+                            spaceAfter=4
+                        )
+                    ))
+                    
+                    # Mapping table
+                    mapping_table_data = [['Portal Field Name', 'Database Field Name']]
+                    for portal_name, db_name in sorted(mappings.items()):
+                        # Truncate long names
+                        portal_display = (portal_name[:50] + '...') if len(portal_name) > 53 else portal_name
+                        db_display = (db_name[:35] + '...') if len(db_name) > 38 else db_name
+                        mapping_table_data.append([portal_display, db_display])
+                    
+                    story.append(self._create_mapping_table(mapping_table_data))
+                    story.append(Spacer(1, 2))
+                    
+                    # Unmapped fields count
+                    company_unmapped = unmapped_names.get(company, [])
+                    if company_unmapped:
+                        unmapped_preview = ', '.join(company_unmapped[:5])
+                        if len(company_unmapped) > 5:
+                            unmapped_preview += f", ... (+{len(company_unmapped) - 5} more)"
+                        story.append(Paragraph(
+                            f"<i>⚠️ Unmapped fields ({len(company_unmapped)}): {unmapped_preview}</i>",
+                            ParagraphStyle(
+                                name='UnmappedText',
+                                parent=self.styles['Normal'],
+                                fontSize=7,
+                                textColor=colors.HexColor('#c53030'),
+                                spaceAfter=4
+                            )
+                        ))
+                else:
+                    story.append(Paragraph(
+                        f"<b>{company}</b> - No mappings applied (using original names)",
+                        ParagraphStyle(
+                            name='NoMappingText',
+                            parent=self.styles['Normal'],
+                            fontSize=8,
+                            textColor=colors.HexColor('#718096'),
+                            spaceBefore=4,
+                            spaceAfter=4
+                        )
+                    ))
+
         story.append(self._create_section_header("🏁 Complete Process Summary"))
         
         extraction_duration = (overall_end_time - overall_start_time).total_seconds()
@@ -433,6 +497,43 @@ class ExtractionReportGenerator:
         table.setStyle(TableStyle(style))
         return table
     
+    def _create_mapping_table(self, data: List[List[str]]) -> Table:
+        """Create a styled mapping table showing portal field names to database field names.
+        
+        Args:
+            data: List of rows, first row is header ['Portal Field Name', 'Database Field Name']
+        
+        Returns:
+            Table: Styled ReportLab table
+        """
+        table = Table(data, colWidths=[250, 200])
+        
+        style = [
+            # Header row
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2b6cb0')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            
+            # Data rows
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 1), (-1, -1), 'TOP'),
+            
+            # Borders and padding
+            ('PADDING', (0, 0), (-1, -1), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ]
+        
+        # Alternate row colors
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#ebf8ff')))
+        
+        table.setStyle(TableStyle(style))
+        return table
+    
     def _create_summary_table(self, data: List[List[str]]) -> Table:
         """Create a styled summary table."""
         table = Table(data, colWidths=[180, 100, 80])
@@ -483,7 +584,8 @@ def generate_extraction_report(
     total_duration: float,
     output_folder: str,
     portals_processed: List[str],
-    deletion_details: Dict = None
+    deletion_details: Dict = None,
+    mapping_details: Dict = None
 ) -> str:
     """
     Convenience function to generate extraction report.
@@ -506,5 +608,6 @@ def generate_extraction_report(
         total_duration=total_duration,
         output_folder=output_folder,
         portals_processed=portals_processed,
-        deletion_details=deletion_details
+        deletion_details=deletion_details,
+        mapping_details=mapping_details
     )

@@ -115,9 +115,10 @@ class TakafulAuthToken:
     def get_headers(self):
         """
         Return headers with authorization for API calls.
+        Includes custom headers for Takaful portal.
         
         Returns:
-            dict: Headers dictionary with Bearer token
+            dict: Headers dictionary with Bearer token and custom headers
             
         Raises:
             ValueError: If token is not set
@@ -125,11 +126,16 @@ class TakafulAuthToken:
         if not self.token:
             raise ValueError("Token not set. Call extract_token_from_browser first.")
         
-        return {
+        # Import here to avoid circular imports
+        from .mapping import CUSTOM_HEADERS
+        
+        headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": "application/json, text/plain, */*",
+            **CUSTOM_HEADERS  # Add custom headers (insurerurl, reinsurername, client_code)
         }
+        return headers
     
     def is_valid(self):
         """Check if token exists."""

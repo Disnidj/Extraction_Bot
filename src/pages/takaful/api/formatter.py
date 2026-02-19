@@ -1,6 +1,7 @@
 """  
 Takaful Benefits Formatter
 Converts JSON extraction results to database-compatible format.
+Updated to follow Orient Aura/Qatar pattern with groups → emirates → tpas → plans.
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
@@ -66,6 +67,10 @@ class TakafulFormatter:
         takaful_logger.info("Starting Takaful data formatting...")
         self.output_lines = []
         
+        # Collect unique TPAs and Networks for dropdown records
+        all_tpas = set()  # {tpa_name}
+        tpa_networks = {}  # {tpa_name: set(network_names)}
+        
         # Pre-Level: Process Industry Categories (Business Nature)
         industry_categories = self.results.get("industry_categories", [])
         if industry_categories:
@@ -79,34 +84,81 @@ class TakafulFormatter:
             )
             takaful_logger.debug(f"Added {len(industry_categories)} Industry Category records")
         
-        # Iterate through the hierarchy: emirates -> tpas -> plans -> benefits
-        takaful_logger.info("Processing hierarchy: Emirates -> TPAs -> Plans -> Benefits")
+        # Iterate through the hierarchy: groups → emirates → tpas → plans → benefits
+        takaful_logger.info("Processing hierarchy: Groups → Emirates → TPAs → Plans → Benefits")
         
+        group_count = 0
         emirate_count = 0
         tpa_count = 0
         plan_count = 0
         
-        for emirate_name, emirate_data in self.results.get("emirates", {}).items():
-            emirate_count += 1
-            takaful_logger.debug(f"Processing Emirate: {emirate_name}")
-            
-            for tpa_name, tpa_data in emirate_data.get("tpas", {}).items():
-                tpa_count += 1
-                takaful_logger.debug(f"  Processing TPA: {tpa_name}")
-                
-                for plan_name, plan_data in tpa_data.get("plans", {}).items():
-                    plan_count += 1
-                    benefit_count = len(plan_data.get("benefits", {}))
-                    takaful_logger.debug(f"    Processing Plan: {plan_name} ({benefit_count} benefits)")
-                    
-                    self._process_plan_benefits(
-                        region=emirate_name,
-                        tpa=tpa_name,
-                        network=plan_name,
-                        benefits=plan_data.get("benefits", {})
-                    )
+        groups = self.results.get("groups", {})
         
-        takaful_logger.info(f"Formatting complete: {emirate_count} Emirates, {tpa_count} TPAs, {plan_count} Plans")
+        for group_name, group_data in groups.items():
+            group_count += 1
+            takaful_logger.debug(f"Processing Group: {group_name}")
+            
+            for emirate_name, emirate_data in group_data.get("emirates", {}).items():
+                emirate_count += 1
+                takaful_logger.debug(f"  Processing Emirate: {emirate_name}")
+                
+                for tpa_name, tpa_data in emirate_data.get("tpas", {}).items():
+                    tpa_count += 1
+                    takaful_logger.debug(f"    Processing TPA: {tpa_name}")
+                    
+                    # Collect TPA for dropdown records
+                    all_tpas.add(tpa_name)
+                    if tpa_name not in tpa_networks:
+                        tpa_networks[tpa_name] = set()
+                    
+                    for plan_name, plan_data in tpa_data.get("plans", {}).items():
+                        plan_count += 1
+                        benefit_count = len(plan_data.get("benefits", {}))
+                        takaful_logger.debug(f"      Processing Plan: {plan_name} ({benefit_count} benefits)")
+                        
+                        # Collect Network (Plan) for dropdown records
+                        tpa_networks[tpa_name].add(plan_name)
+                        
+                        self._process_plan_benefits(
+                            region=emirate_name,
+                            tpa=tpa_name,
+                            network=plan_name,
+                            benefits=plan_data.get("benefits", {})
+                        )
+        
+        # ════════════════════════════════════════════════════════════════
+        # Add TPA dropdown records (Dropdown_Name = "TPA")
+        # ════════════════════════════════════════════════════════════════
+        if all_tpas:
+            takaful_logger.info(f"Adding TPA dropdown records: {len(all_tpas)} unique TPAs")
+            self._add_rows(
+                tpa="",
+                network="",
+                region=PORTAL_REGION,
+                dropdown_name="TPA",
+                values=list(all_tpas)
+            )
+        
+        # ════════════════════════════════════════════════════════════════
+        # Add Network dropdown records (Dropdown_Name = "Network")
+        # Collect ALL unique networks and add with empty TPA/Network
+        # so they get expanded to all TPA/Network combinations
+        # ════════════════════════════════════════════════════════════════
+        all_networks = set()
+        for networks in tpa_networks.values():
+            all_networks.update(networks)
+        
+        if all_networks:
+            takaful_logger.info(f"Adding Network dropdown records: {len(all_networks)} unique networks")
+            self._add_rows(
+                tpa="",
+                network="",
+                region=PORTAL_REGION,
+                dropdown_name="Network",
+                values=list(all_networks)
+            )
+        
+        takaful_logger.info(f"Formatting complete: {group_count} Groups, {emirate_count} Emirates, {tpa_count} TPAs, {plan_count} Plans")
         takaful_logger.info(f"Total records before expansion: {len(self.output_lines)}")
         
         return self.output_lines

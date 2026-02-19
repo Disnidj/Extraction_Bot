@@ -31,6 +31,7 @@ from src.pages.qatar.qatar_main_api import run_qatar_api_extraction
 from src.pages.sukoon.sukoonmain_api import run_sukoon_api_extraction
 from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
 from src.pages.orient_aura.orient_aura_main_api import run_orient_aura_api_extraction
+from src.pages.nlgi_aura.nlgi_aura_main_api import run_nlgi_aura_api_extraction
 from src.services.db_service.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
 from src.services.extraction_report.report_generator import generate_extraction_report
@@ -90,6 +91,7 @@ API_PORTAL_GROUPS = {
         {"function": run_maxhealth_api_extraction, "name": "MaxHealth"},
         {"function": run_sukoon_api_extraction, "name": "Sukoon"},
         {"function": run_orient_aura_api_extraction, "name": "Orient Aura"},
+        {"function": run_nlgi_aura_api_extraction, "name": "NLGI Aura"},
     ]
 }
 
@@ -366,7 +368,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
     print("=" * 70)
     
     db_upload_start = datetime.now()
-    success, rows_inserted, upload_msg, deletion_details = upload_to_database(run_output_dir)
+    success, rows_inserted, upload_msg, deletion_details, mapping_details = upload_to_database(run_output_dir)
     db_upload_end = datetime.now()
     db_upload_duration = db_upload_end - db_upload_start
     
@@ -387,6 +389,15 @@ async def run_api_extraction_mode(playwright, selected_companies):
                 main_execution_logger.info(f"      • {company}:")
                 main_execution_logger.info(f"         - Rows deleted: {details['rows_deleted']}")
                 main_execution_logger.info(f"         - Dropdown names: {', '.join(details['dropdown_names']) if details['dropdown_names'] else 'None'}")
+        
+        # Log mapping details per portal
+        if mapping_details and mapping_details.get('applied_mappings'):
+            main_execution_logger.info(f"\n   🔄 Dropdown Mappings Applied by Portal:")
+            for company, mappings in mapping_details['applied_mappings'].items():
+                if mappings:
+                    main_execution_logger.info(f"      • {company} ({len(mappings)} mappings):")
+                    for portal_name, db_name in sorted(mappings.items()):
+                        main_execution_logger.info(f"         - {portal_name} → {db_name}")
         
         main_execution_logger.info(f"{'='*70}\n")
     else:
@@ -447,7 +458,8 @@ async def run_api_extraction_mode(playwright, selected_companies):
             total_duration=total_seconds,
             output_folder=run_output_dir,
             portals_processed=[p['name'] for p in matching_portals],
-            deletion_details=deletion_details
+            deletion_details=deletion_details,
+            mapping_details=mapping_details
         )
         print(f"✅ PDF Report generated: {pdf_path}")
         main_execution_logger.info(f"\n{'='*70}")

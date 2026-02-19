@@ -27,14 +27,15 @@ async def login_and_get_token(playwright: Playwright):
     page = await context.new_page()
     
     try:
-        # Login using existing LoginPage
+        # Login using LoginPage with retry logic (handles 90s timeout internally)
         login_page = LoginPage(page)
-        await login_page.login()
-        qatar_logger.debug("Login completed")
+        login_success = await login_page.login()
         
-        # Wait for dashboard to ensure login is complete
-        await page.wait_for_selector("text=Create new quote", timeout=80000)
-        qatar_logger.debug("Dashboard loaded - Create new quote button visible")
+        if not login_success:
+            qatar_logger.error("Login failed after retries")
+            return None
+        
+        qatar_logger.debug("Login completed")
         
         # Wait a bit more to ensure token is stored
         await asyncio.sleep(2)
