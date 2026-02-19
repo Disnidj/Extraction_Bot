@@ -1,10 +1,11 @@
-"""  
-Orient Aura Benefits Formatter
-Converts JSON extraction results to database-compatible format.
+"""
+NLGI Aura Data Formatter
+Converts API responses to database format (matches Orient Aura/Qatar pattern exactly)
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
 - Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Network = Plan name (NOT TPA name!)
 
 TPA/Network Expansion:
 - Uses shared expansion service from src.services.formatter_service
@@ -13,57 +14,48 @@ TPA/Network Expansion:
 
 import json
 import os
+from typing import Dict, List
 from datetime import datetime
-from typing import List, Dict
 from src.services.formatter_service import expand_empty_tpa_network
-from src.utils.logger import orient_aura_logger
-from .mapping import PORTAL_REGION
+from src.utils.logger import nlgi_aura_logger
+from .mapping import NLGI_MAPPING, PORTAL_REGION
 
 
-# Default Broker ID - can be configured
+# Default Broker ID
 DEFAULT_BROKER_ID = 3
 
+# Get group name for TPA prefix
+GROUP_NAME = NLGI_MAPPING["group"]["group_name"]
 
-class OrientAuraFormatter:
-    """Formats Orient Aura benefits JSON to database-compatible format."""
+
+class NLGIAuraFormatter:
+    """Formats NLGI Aura API data for database insertion"""
     
     def __init__(self, results: dict = None, broker_id: int = DEFAULT_BROKER_ID):
         """
         Initialize formatter.
         
         Args:
-            results: Extraction results dict (optional, can load from file)
+            results: Extraction results dict (optional)
             broker_id: Broker ID for database records
         """
         self.results = results
         self.broker_id = broker_id
+        self.company = "NLGI Aura"
         self.output_lines = []
-        self.company_name = "Orient Aura"
     
-    def load_from_file(self, json_file_path: str):
-        """
-        Load extraction results from JSON file.
-        
-        Args:
-            json_file_path: Path to JSON file
-        """
-        with open(json_file_path, "r", encoding="utf-8") as f:
-            self.results = json.load(f)
-        orient_aura_logger.debug(f"Loaded results from {json_file_path}")
-    
-    def format_to_text(self) -> list:
+    def format_to_text(self) -> List[Dict]:
         """
         Convert JSON results to database-compatible format.
-        Each line is a JSON object with:
-        - Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+        Matches Orient Aura/Qatar hierarchical pattern.
         
         Returns:
-            list: List of formatted lines (one per Selection_Value)
+            List of formatted records
         """
         if not self.results:
-            raise ValueError("No results to format. Load or provide results first.")
+            raise ValueError("No results to format")
         
-        orient_aura_logger.info("Starting Orient Aura data formatting...")
+        nlgi_aura_logger.info("Starting NLGI Aura data formatting...")
         self.output_lines = []
         
         # Collect unique TPAs and Networks for dropdown records
@@ -71,57 +63,49 @@ class OrientAuraFormatter:
         tpa_networks = {}  # {combined_tpa_name: set(network_names)}
         
         # Pre-Level: Process Industry Categories (Business Nature)
-        industry_categories = self.results.get("industry_categories", [])
-        if industry_categories:
-            orient_aura_logger.info(f"Processing Industry Categories: {len(industry_categories)} values")
+        industries = self.results.get("industry_categories", [])
+        if industries:
+            nlgi_aura_logger.info(f"Processing Industry Categories: {len(industries)} values")
             self._add_rows(
-                tpa="",  # No TPA context for pre-level
-                network="",  # No Network context for pre-level
-                region=PORTAL_REGION,  # Default Region for pre-level
+                tpa="",  # No TPA for pre-level
+                network="",  # No Network for pre-level
+                region=PORTAL_REGION,
                 dropdown_name="Industry Categories",
-                values=industry_categories
+                values=industries
             )
-            orient_aura_logger.debug(f"Added {len(industry_categories)} Industry Category records")
+            nlgi_aura_logger.debug(f"Added {len(industries)} Industry Category records")
         
-        # Iterate through the hierarchy: groups → emirates → tpas → plans → benefits
-        orient_aura_logger.info("Processing hierarchy: Groups → Emirates → TPAs → Plans → Benefits")
+        # Process hierarchical data: Groups → Emirates → TPAs → Plans → Benefits
+        groups = self.results.get("groups", {})
+        nlgi_aura_logger.info(f"Processing {len(groups)} groups")
         
-        group_count = 0
-        emirate_count = 0
-        tpa_count = 0
-        plan_count = 0
-        
-        for group_name, group_data in self.results.get("groups", {}).items():
-            group_count += 1
-            orient_aura_logger.debug(f"Processing Group: {group_name}")
+        for group_name, group_data in groups.items():
+            emirates = group_data.get("emirates", {})
             
-            for emirate_name, emirate_data in group_data.get("emirates", {}).items():
-                emirate_count += 1
-                orient_aura_logger.debug(f"  Processing Emirate: {emirate_name}")
+            for emirate_name, emirate_data in emirates.items():
+                tpas = emirate_data.get("tpas", {})
                 
-                for tpa_name, tpa_data in emirate_data.get("tpas", {}).items():
-                    tpa_count += 1
-                    # Combine Group Name with TPA Name (e.g., "Nextcare Sme - Nextcare")
-                    combined_tpa = f"{group_name} - {tpa_name}" if tpa_name else ""
-                    orient_aura_logger.debug(f"    Processing TPA: {combined_tpa}")
+                for tpa_name, tpa_data in tpas.items():
+                    # Combine Group Name with TPA Name (e.g., "GlobalCare SME - NAS")
+                    combined_tpa = f"{group_name} - {tpa_name}"
                     
                     # Collect TPA for dropdown records
                     all_tpas.add(combined_tpa)
                     if combined_tpa not in tpa_networks:
                         tpa_networks[combined_tpa] = set()
                     
-                    for plan_name, plan_data in tpa_data.get("plans", {}).items():
-                        plan_count += 1
-                        benefit_count = len(plan_data.get("benefits", {}))
-                        orient_aura_logger.debug(f"      Processing Plan: {plan_name} ({benefit_count} benefits)")
+                    plans = tpa_data.get("plans", {})
+                    
+                    for plan_name, plan_data in plans.items():
+                        benefits = plan_data.get("benefits", {})
                         
                         # Collect Network (Plan) for dropdown records
                         tpa_networks[combined_tpa].add(plan_name)
                         
                         self._process_plan_benefits(
-                            tpa_name=combined_tpa,  # Combined format: "Nextcare Sme - Nextcare"
-                            plan_name=plan_name,
-                            benefits=plan_data.get("benefits", {}),
+                            tpa_name=combined_tpa,  # Combined format
+                            plan_name=plan_name,  # Network = Plan name!
+                            benefits=benefits,
                             region=emirate_name
                         )
         
@@ -129,7 +113,7 @@ class OrientAuraFormatter:
         # Add TPA dropdown records (Dropdown_Name = "TPA")
         # ════════════════════════════════════════════════════════════════
         if all_tpas:
-            orient_aura_logger.info(f"Adding TPA dropdown records: {len(all_tpas)} unique TPAs")
+            nlgi_aura_logger.info(f"Adding TPA dropdown records: {len(all_tpas)} unique TPAs")
             self._add_rows(
                 tpa="",
                 network="",
@@ -148,7 +132,7 @@ class OrientAuraFormatter:
             all_networks.update(networks)
         
         if all_networks:
-            orient_aura_logger.info(f"Adding Network dropdown records: {len(all_networks)} unique networks")
+            nlgi_aura_logger.info(f"Adding Network dropdown records: {len(all_networks)} unique networks")
             self._add_rows(
                 tpa="",
                 network="",
@@ -157,18 +141,17 @@ class OrientAuraFormatter:
                 values=list(all_networks)
             )
         
-        orient_aura_logger.info(f"Formatting complete: {len(self.output_lines)} total records")
-        orient_aura_logger.info(f"  Groups: {group_count}, Emirates: {emirate_count}, TPAs: {tpa_count}, Plans: {plan_count}")
-        
+        nlgi_aura_logger.info(f"Formatting complete: {len(self.output_lines)} total records")
         return self.output_lines
     
-    def _process_plan_benefits(self, tpa_name: str, plan_name: str, benefits: dict, region: str):
+    def _process_plan_benefits(self, tpa_name: str, plan_name: str, benefits: Dict, region: str):
         """
         Process benefits for a single plan.
+        Matches Orient Aura/Qatar pattern exactly.
         
         Args:
-            tpa_name: TPA name (e.g., "Nextcare")
-            plan_name: Plan/Network name (e.g., "Plan1 GN+")
+            tpa_name: Combined TPA name (e.g., "GlobalCare SME - NAS")
+            plan_name: Plan/Network name (e.g., "Plan A - WW") - THIS IS THE NETWORK!
             benefits: Benefits dict keyed by benefit header ID
             region: Region/Emirate name (e.g., "Dubai")
         """
@@ -176,10 +159,10 @@ class OrientAuraFormatter:
             if not isinstance(benefit_options, list):
                 continue
             
-            # Extract benefit name from first option
             if not benefit_options:
                 continue
             
+            # Extract benefit name from first option
             benefit_name = benefit_options[0].get("benefits_name", "Unknown")
             
             # Collect all unique option values
@@ -192,13 +175,13 @@ class OrientAuraFormatter:
             if option_values:
                 self._add_rows(
                     tpa=tpa_name,
-                    network=plan_name,
+                    network=plan_name,  # Use plan_name for Network field!
                     region=region,
                     dropdown_name=benefit_name,
                     values=option_values
                 )
     
-    def _add_rows(self, tpa: str, network: str, region: str, dropdown_name: str, values: list):
+    def _add_rows(self, tpa: str, network: str, region: str, dropdown_name: str, values: List):
         """
         Add rows to output for a single dropdown field.
         Creates one row per value.
@@ -213,7 +196,7 @@ class OrientAuraFormatter:
         for value in values:
             row = {
                 "Broker_ID": self.broker_id,
-                "Company": self.company_name,
+                "Company": self.company,
                 "TPA": tpa,
                 "Network": network,
                 "Region": region,
@@ -236,13 +219,13 @@ class OrientAuraFormatter:
         formatted_lines = self.format_to_text()
         
         # Save to portal-specific subfolder
-        portal_dir = os.path.join(output_dir, "orient_aura")
+        portal_dir = os.path.join(output_dir, "nlgi_aura")
         os.makedirs(portal_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(portal_dir, f"orient_aura_extracted_{timestamp}.txt")
+        output_file = os.path.join(portal_dir, f"nlgi_aura_extracted_{timestamp}.txt")
         
         # Apply TPA/Network expansion for records with empty TPA/Network
-        # This expands pre-level fields to all TPA/Network combinations
+        # This expands pre-level fields (Industry Categories) to all TPA/Network combinations
         expanded_lines = expand_empty_tpa_network(formatted_lines)
         
         # Write to file (one JSON object per line)
@@ -251,8 +234,8 @@ class OrientAuraFormatter:
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
         
         print(f"\n💾 Formatted text file saved to {output_file}")
-        orient_aura_logger.info(f"Formatted output saved to {output_file}")
-        orient_aura_logger.info(f"Total records after expansion: {len(expanded_lines)}")
+        nlgi_aura_logger.info(f"Formatted output saved to {output_file}")
+        nlgi_aura_logger.info(f"Total records after expansion: {len(expanded_lines)}")
         
         return output_file
     

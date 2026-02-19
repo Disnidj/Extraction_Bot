@@ -1,8 +1,9 @@
 """
-Orient Aura API Extractor
+NLGI Aura API Extractor
 Orchestrates extraction of all dropdown values using API calls.
+Updated to follow Orient Aura/Qatar pattern.
 
-Flow (Orient-specific):
+Flow (matching Orient/Qatar):
 Pre-Level: Industry Categories (Business Nature)
 Level 0: Groups
 Level 1: Emirates (per group)
@@ -14,12 +15,12 @@ Level 4: Benefits (per plan)
 import json
 import os
 from datetime import datetime
-from src.utils.logger import orient_aura_logger
-from .client import OrientAuraAPIClient
-from .mapping import PORTAL_REGION, ORIENT_MAPPING
+from src.utils.logger import nlgi_aura_logger
+from .client import NLGIAuraAPIClient
+from .mapping import PORTAL_REGION, NLGI_MAPPING
 
 
-class OrientAuraAPIExtractor:
+class NLGIAuraAPIExtractor:
     """Extracts all dropdown values via API calls."""
     
     def __init__(self, auth):
@@ -27,37 +28,37 @@ class OrientAuraAPIExtractor:
         Initialize extractor with auth token.
         
         Args:
-            auth: OrientAuraAuthToken instance with valid token
+            auth: NLGIAuraAuthToken instance with valid token
         """
         self.auth = auth
         self.results = None
     
     async def extract_all_benefits(self):
         """
-        Extract all benefit dropdown values for Orient Aura portal.
+        Extract all benefit dropdown values for NLGI Aura portal.
         
-        Hierarchy:
+        Hierarchy (matching Orient/Qatar):
         - Industry Categories (Pre-Level)
         - Groups → Emirates → TPAs → Plans → Benefits
         
         Returns:
             dict: Complete extraction results
         """
-        orient_aura_logger.info("="*60)
-        orient_aura_logger.info("🚀 ORIENT AURA API EXTRACTION STARTED")
-        orient_aura_logger.info("="*60)
+        nlgi_aura_logger.info("="*60)
+        nlgi_aura_logger.info("🚀 NLGI AURA API EXTRACTION STARTED")
+        nlgi_aura_logger.info("="*60)
         
         self.results = {
-            "portal": "ORIENT AURA",
+            "portal": "NLGI AURA",
             "extracted_at": datetime.now().isoformat(),
             "industry_categories": [],
             "groups": {}
         }
         
-        async with OrientAuraAPIClient(self.auth) as client:
+        async with NLGIAuraAPIClient(self.auth) as client:
             # Pre-Level: Extract Industry Categories (Business Nature)
             print("\n📥 Pre-Level: Extracting Industry Categories (Business Nature)...")
-            orient_aura_logger.info("Pre-Level: Extracting Industry Categories")
+            nlgi_aura_logger.info("Pre-Level: Extracting Industry Categories")
             industries = await client.get_industries()
             if industries:
                 # Only include industries where allows="true"
@@ -67,19 +68,19 @@ class OrientAuraAPIExtractor:
                     if ind.get("allows", "").lower() == "true"
                 ]
                 self.results["industry_categories"] = allowed_industries
-                orient_aura_logger.info(f"Industry Categories: {len(allowed_industries)} options extracted")
+                nlgi_aura_logger.info(f"Industry Categories: {len(allowed_industries)} options extracted")
                 print(f"   ✓ Industry Categories: {len(allowed_industries)} options")
             else:
-                orient_aura_logger.warning("No Industry Categories found")
+                nlgi_aura_logger.warning("No Industry Categories found")
                 print("   ⚠️ No Industry Categories found")
             
             # Level 0: Get groups from API and find matching group by name
-            target_group_name = ORIENT_MAPPING["group"]["group_name"]  # "Nextcare Sme"
+            target_group_name = NLGI_MAPPING["group"]["group_name"]  # "GlobalCare SME"
             print(f"\n📥 Level 0: Fetching groups from API, looking for: {target_group_name}")
-            orient_aura_logger.info(f"Fetching groups from API, target: {target_group_name}")
+            nlgi_aura_logger.info(f"Fetching groups from API, target: {target_group_name}")
             
-            all_groups = await client.get_groups(version_id=ORIENT_MAPPING["version_id"])
-            orient_aura_logger.info(f"Found {len(all_groups)} groups from API")
+            all_groups = await client.get_groups(version_id=NLGI_MAPPING["version_id"])
+            nlgi_aura_logger.info(f"Found {len(all_groups)} groups from API")
             
             # Find the matching group by name
             matching_group = None
@@ -89,7 +90,7 @@ class OrientAuraAPIExtractor:
                     break
             
             if not matching_group:
-                orient_aura_logger.error(f"Group '{target_group_name}' not found in API response!")
+                nlgi_aura_logger.error(f"Group '{target_group_name}' not found in API response!")
                 print(f"   ❌ Group '{target_group_name}' not found!")
                 print(f"   Available groups: {[g.get('group_name') for g in all_groups]}")
                 return self.results
@@ -100,11 +101,11 @@ class OrientAuraAPIExtractor:
             reinsurer_company_id = matching_group.get("reinsurer_company_id")
             
             print(f"   ✓ Found Group: {group_name} (ID: {group_id}) from API")
-            orient_aura_logger.info(f"Using Group from API: {group_name} (ID: {group_id})")
+            nlgi_aura_logger.info(f"Using Group from API: {group_name} (ID: {group_id})")
             
             # Process the matched group
             print(f"\n🏢 Processing Group: {group_name} (ID: {group_id})")
-            orient_aura_logger.info(f"Processing Group: {group_name}")
+            nlgi_aura_logger.info(f"Processing Group: {group_name}")
             
             group_results = await self._extract_group_data(
                 client, group_name, group_id, reinsurer_company_id
@@ -118,7 +119,7 @@ class OrientAuraAPIExtractor:
         Extract data for a single group.
         
         Args:
-            client: OrientAuraAPIClient instance
+            client: NLGIAuraAPIClient instance
             group_name: Name of the group
             group_id: Group ID
             reinsurer_company_id: Reinsurer company ID
@@ -136,11 +137,11 @@ class OrientAuraAPIExtractor:
         emirates_list = await client.get_emirates(group_id)
         
         if not emirates_list:
-            orient_aura_logger.warning(f"No emirates found for group {group_name}")
+            nlgi_aura_logger.warning(f"No emirates found for group {group_name}")
             print(f"   ⚠️ No emirates found")
             return group_results
         
-        # Filter to Dubai only (like Takaful, Qatar, ADNIC)
+        # Filter to Dubai only (like Takaful, Qatar, Orient Aura)
         dubai_emirate = None
         for emirate in emirates_list:
             if emirate.get("emirates", "").strip().lower() == "dubai":
@@ -148,12 +149,12 @@ class OrientAuraAPIExtractor:
                 break
         
         if not dubai_emirate:
-            orient_aura_logger.warning(f"Dubai emirate not found for group {group_name}")
+            nlgi_aura_logger.warning(f"Dubai emirate not found for group {group_name}")
             print(f"   ⚠️ Dubai emirate not found")
             return group_results
         
         print(f"   📍 Processing: Dubai only ")
-        orient_aura_logger.info(f"Processing Dubai emirate only")
+        nlgi_aura_logger.info(f"Processing Dubai emirate only")
         
         # Process Dubai emirate only
         emirate_name = dubai_emirate.get("emirates")
@@ -169,7 +170,7 @@ class OrientAuraAPIExtractor:
         Extract data for a single emirate.
         
         Args:
-            client: OrientAuraAPIClient instance
+            client: NLGIAuraAPIClient instance
             emirate_name: Name of the emirate
             emirate_config: Emirate configuration dict from API
             
@@ -177,7 +178,7 @@ class OrientAuraAPIExtractor:
             dict: Emirate extraction results
         """
         print(f"\n🌍 Processing Emirate: {emirate_name}")
-        orient_aura_logger.info(f"Processing emirate: {emirate_name}")
+        nlgi_aura_logger.info(f"Processing emirate: {emirate_name}")
         
         emirates_id = emirate_config.get("emirates_master_id")
         
@@ -192,18 +193,18 @@ class OrientAuraAPIExtractor:
         tpas = await client.get_tpas(emirates_id)
         
         if not tpas:
-            orient_aura_logger.warning(f"No TPAs found for {emirate_name}")
+            nlgi_aura_logger.warning(f"No TPAs found for {emirate_name}")
             print(f"   ⚠️ No TPAs found")
             return emirate_results
         
         print(f"   🏥 Found {len(tpas)} TPAs")
-        orient_aura_logger.info(f"Found {len(tpas)} TPAs for {emirate_name}")
+        nlgi_aura_logger.info(f"Found {len(tpas)} TPAs for {emirate_name}")
         
         # Process each TPA
         for tpa in tpas:
             tpa_name = tpa.get("tpa_name")
             print(f"\n   📋 Processing TPA: {tpa_name}")
-            orient_aura_logger.info(f"Processing TPA: {tpa_name}")
+            nlgi_aura_logger.info(f"Processing TPA: {tpa_name}")
             tpa_results = await self._extract_tpa_data(client, tpa_name, tpa)
             emirate_results["tpas"][tpa_name] = tpa_results
             print(f"   ✅ Completed TPA: {tpa_name}")
@@ -216,7 +217,7 @@ class OrientAuraAPIExtractor:
         Extract data for a single TPA.
         
         Args:
-            client: OrientAuraAPIClient instance
+            client: NLGIAuraAPIClient instance
             tpa_name: Name of the TPA
             tpa_config: TPA configuration dict from API
             
@@ -224,12 +225,11 @@ class OrientAuraAPIExtractor:
             dict: TPA extraction results
         """
         tpa_id = tpa_config.get("tpa_id")
+        # Get reinsurer_company_id from TPA API response (format: "6,6,6" - take first value)
+        reinsurer_company_id = int(str(tpa_config.get("reinsurer_company_id", "6")).split(",")[0])
         
         tpa_results = {
             "tpa_id": tpa_id,
-            "group_id": tpa_config.get("group_id"),
-            "emirates_id": tpa_config.get("emirates_id"),
-            "reinsurer_company_id": tpa_config.get("reinsurer_company_id"),
             "plans": {}
         }
         
@@ -237,105 +237,105 @@ class OrientAuraAPIExtractor:
         plans = await client.get_plans(tpa_id)
         
         if not plans:
-            orient_aura_logger.warning(f"No plans found for TPA {tpa_name}")
+            nlgi_aura_logger.warning(f"No plans found for TPA {tpa_name}")
             print(f"      ⚠️ No plans found")
             return tpa_results
         
-        print(f"      📄 Found {len(plans)} plans")
-        orient_aura_logger.info(f"Found {len(plans)} plans for TPA {tpa_name}")
+        print(f"      📋 Found {len(plans)} plans")
+        nlgi_aura_logger.info(f"Found {len(plans)} plans for TPA {tpa_name}")
         
         # Process each plan
         for plan in plans:
-            plan_name = plan.get("plans", "").strip()
+            plan_name = plan.get("plans")
             plan_id = plan.get("plan_id")
-            print(f"         📋 Extracting plan: {plan_name} (ID: {plan_id})")
-            plan_results = await self._extract_plan_data(client, plan)
+            print(f"         📥 Extracting benefits for: {plan_name}")
+            nlgi_aura_logger.info(f"Extracting benefits for plan: {plan_name}")
+            
+            # Fetch benefits for this plan
+            benefits = await client.get_benefits(int(plan_id), reinsurer_company_id)
+            
+            plan_results = {
+                "plan_id": plan_id,
+                "reinsurer_plan_id": plan.get("reinsurer_plan_id"),
+                "benefits": benefits
+            }
+            
             tpa_results["plans"][plan_name] = plan_results
+            
+            # Count benefits
+            total_options = sum(len(opts) if isinstance(opts, list) else 0 for opts in benefits.values())
+            print(f"         ✓ {len(benefits)} categories, {total_options} options")
         
         return tpa_results
-    
-    async def _extract_plan_data(self, client, plan):
-        """
-        Extract benefit data for a single plan.
-        
-        Args:
-            client: OrientAuraAPIClient instance
-            plan: Plan data dict from API
-            
-        Returns:
-            dict: Plan extraction results with benefits
-        """
-        plan_id = plan.get("plan_id")
-        plan_name = plan.get("plans", "").strip()
-        reinsurer_company_id = plan.get("reinsurer_company_id")
-        
-        orient_aura_logger.debug(f"Extracting plan: {plan_name} (ID: {plan_id})")
-        
-        # Fetch benefits for this plan
-        benefits = await client.get_benefits(plan_id, reinsurer_company_id)
-        
-        return {
-            "plan_id": plan_id,
-            "reinsurer_plan_id": plan.get("reinsurer_plan_id"),
-            "reinsurer_company_id": reinsurer_company_id,
-            "reinsurer_company_name": plan.get("reinsurer_company_name"),
-            "benefits": benefits
-        }
     
     def save_results(self, output_dir: str = "extracted_data") -> str:
         """
         Save extraction results to JSON file.
         
         Args:
-            output_dir: Base directory to save file
+            output_dir: Base output directory
             
         Returns:
-            str: Path to saved file
+            Path to saved file
         """
-        # Save to portal-specific subfolder
-        portal_dir = os.path.join(output_dir, "orient_aura")
-        os.makedirs(portal_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(portal_dir, f"orient_aura_benefits_{timestamp}.json")
+        if not self.results:
+            nlgi_aura_logger.warning("No results to save")
+            return ""
         
-        with open(output_file, "w", encoding="utf-8") as f:
+        # Create output directory
+        output_folder = os.path.join(output_dir, "nlgi_aura")
+        os.makedirs(output_folder, exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_filename = f"nlgi_aura_benefits_{timestamp}.json"
+        json_path = os.path.join(output_folder, json_filename)
+        
+        # Save to JSON
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(self.results, f, indent=2, ensure_ascii=False)
         
-        print(f"\n💾 JSON results saved to {output_file}")
-        orient_aura_logger.info(f"Results saved to {output_file}")
-        return output_file
+        nlgi_aura_logger.info(f"Results saved to {json_path}")
+        print(f"\n💾 JSON results saved to {json_path}")
+        
+        return json_path
     
     def print_summary(self):
-        """Print extraction summary."""
+        """Print extraction summary statistics."""
+        if not self.results:
+            print("\nNo results to summarize")
+            return
+        
+        groups = self.results.get("groups", {})
+        industries = self.results.get("industry_categories", [])
+        
+        # Count unique TPAs and plans
+        tpa_count = 0
+        plan_count = 0
+        total_benefits = 0
+        
+        for group_name, group_data in groups.items():
+            emirates = group_data.get("emirates", {})
+            for emirate_name, emirate_data in emirates.items():
+                tpas = emirate_data.get("tpas", {})
+                tpa_count += len(tpas)
+                for tpa_name, tpa_data in tpas.items():
+                    plans = tpa_data.get("plans", {})
+                    plan_count += len(plans)
+                    for plan_name, plan_data in plans.items():
+                        benefits = plan_data.get("benefits", {})
+                        total_benefits += sum(
+                            len(opts) if isinstance(opts, list) else 0 
+                            for opts in benefits.values()
+                        )
+        
         print("\n" + "=" * 60)
         print("📊 EXTRACTION SUMMARY")
         print("=" * 60)
-        
-        if not self.results:
-            print("   No results available")
-            return
-        
-        # Count statistics
-        groups_count = len(self.results.get("groups", {}))
-        emirates_list = []
-        tpas_list = []
-        plans_count = 0
-        benefits_count = 0
-        
-        for group_data in self.results.get("groups", {}).values():
-            for emirate_name, emirate_data in group_data.get("emirates", {}).items():
-                emirates_list.append(emirate_name)
-                for tpa_name, tpa_data in emirate_data.get("tpas", {}).items():
-                    tpas_list.append(f"{emirate_name} - {tpa_name}")
-                    for plan_data in tpa_data.get("plans", {}).values():
-                        plans_count += 1
-                        if isinstance(plan_data.get("benefits"), dict):
-                            benefits_count += len(plan_data["benefits"])
-        
-        print(f"   Region: {emirates_list[0] if emirates_list else 'N/A'} (like Takaful/Qatar/ADNIC)")
-        print(f"   Groups processed: {groups_count}")
-        print(f"   TPAs processed: {len(set(tpas_list))}")
-        print(f"   Plans extracted: {plans_count}")
-        print(f"   Benefit categories: {benefits_count}")
-        print(f"   Industry categories: {len(self.results.get('industry_categories', []))}")
+        print(f"   Region: Dubai (like Takaful/Qatar/Orient Aura)")
+        print(f"   Groups processed: {len(groups)}")
+        print(f"   TPAs processed: {tpa_count}")
+        print(f"   Plans extracted: {plan_count}")
+        print(f"   Benefit options: {total_benefits}")
+        print(f"   Industry categories: {len(industries)}")
         print("=" * 60)

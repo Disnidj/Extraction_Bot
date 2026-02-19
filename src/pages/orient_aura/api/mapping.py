@@ -20,16 +20,12 @@ PORTAL_REGION = "Dubai"  # Default region for all records
 
 ORIENT_MAPPING = {
     "portal_name": "Orient Aura",
-    "version_id": 44,  # From API response
-    "group_id": 173,  # Nextcare Sme - Hardcoded for all extractions
+    "version_id": 44,  # Used to call group API
     
-    # Hardcoded group configuration
+    # Group configuration - only group_name is hardcoded
+    # group_id will be fetched from API by matching group_name
     "group": {
-        "group_id": 173,
-        "group_name": "Nextcare Sme",
-        "reinsurer_company_id": 22,
-        "reinsurer_company_name": "allianz",
-        "version_id": 44
+        "group_name": "Nextcare Sme"  # Target group to find in API response
     },
     
     # Emirates configuration (example for Nextcare Sme group)
