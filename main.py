@@ -299,12 +299,26 @@ async def run_api_extraction_mode(playwright, selected_companies):
         main_execution_logger.info(f"🚀 Portal '{portal['name']}' - Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
         
         try:
-            success = await portal["function"](playwright, output_dir=run_output_dir)
+            result = await portal["function"](playwright, output_dir=run_output_dir)
             portal_end = datetime.now()
             portal_duration = portal_end - portal_start
             portal_timings[portal['name']]['end'] = portal_end
             portal_timings[portal['name']]['duration'] = portal_duration
-            portal_results[portal['name']]['success'] = success
+            
+            # Handle different return formats:
+            # - New format: {"success": bool, "results": ..., "errors": [...]}
+            # - Old format: truthy/falsy value or None
+            if isinstance(result, dict) and "success" in result:
+                # New format with explicit success flag and errors
+                success = result.get("success", False)
+                errors = result.get("errors", [])
+                portal_results[portal['name']]['success'] = success
+                if errors:
+                    portal_results[portal['name']]['error'] = "; ".join(errors)
+            else:
+                # Old format - truthy value means success
+                success = bool(result)
+                portal_results[portal['name']]['success'] = success
             
             if success:
                 print(f"\n✅ {portal['name']} extraction completed!")
@@ -313,11 +327,12 @@ async def run_api_extraction_mode(playwright, selected_companies):
                     f"Duration: {portal_duration.total_seconds():.2f}s ({int(portal_duration.total_seconds() // 60)}m {int(portal_duration.total_seconds() % 60)}s)"
                 )
             else:
+                error_msg = portal_results[portal['name']].get('error') or "Extraction returned False"
+                portal_results[portal['name']]['error'] = error_msg
                 print(f"\n❌ {portal['name']} extraction failed!")
-                portal_results[portal['name']]['error'] = "Extraction returned False"
                 main_execution_logger.error(
                     f"❌ Portal '{portal['name']}' - Failed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
-                    f"Duration: {portal_duration.total_seconds():.2f}s"
+                    f"Duration: {portal_duration.total_seconds():.2f}s | Error: {error_msg}"
                 )
         except Exception as e:
             portal_end = datetime.now()
@@ -360,6 +375,15 @@ async def run_api_extraction_mode(playwright, selected_companies):
                 f"({int(timing['duration'].total_seconds() // 60)}m {int(timing['duration'].total_seconds() % 60)}s) | "
                 f"{timing['start'].strftime('%H:%M:%S')} → {timing['end'].strftime('%H:%M:%S')}"
             )
+    
+    # Log portal extraction errors if any
+    failed_portals = {k: v for k, v in portal_results.items() if not v.get('success') or v.get('error')}
+    if failed_portals:
+        main_execution_logger.info(f"\n⚠️ PORTAL EXTRACTION ERRORS:")
+        for portal_name, result in failed_portals.items():
+            error_msg = result.get('error', 'Unknown error')
+            main_execution_logger.error(f"  ❌ {portal_name}: {error_msg}")
+    
     main_execution_logger.info(f"{'='*70}\n")
 
     # Upload extracted data to database

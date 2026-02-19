@@ -246,18 +246,38 @@ class ExtractionReportGenerator:
         story.append(self._create_section_header("📤 Database Upload Summary"))
         
         db_status = "SUCCESS" if db_upload_success else "FAILED"
+        
+        # Check if only_mapped_mode is enabled
+        only_mapped_mode = mapping_details.get('only_mapped_mode', False) if mapping_details else False
+        upload_mode = "ONLY MAPPED DROPDOWNS" if only_mapped_mode else "ALL DROPDOWNS"
+        
         db_data = [
             ['Status', db_status],
+            ['Upload Mode', upload_mode],
             ['Rows Inserted', f"{db_rows_inserted:,}"],
             ['Duration', self._format_duration(db_upload_duration)],
             ['Time', f"{db_upload_start.strftime('%H:%M:%S')} → {db_upload_end.strftime('%H:%M:%S')}"]
         ]
         story.append(self._create_info_table(db_data, highlight_success=(0, 1) if db_upload_success else None, highlight_fail=(0, 1) if not db_upload_success else None))
+        
+        # Add note about only mapped mode
+        if only_mapped_mode and db_upload_success:
+            story.append(Spacer(1, 3))
+            story.append(Paragraph(
+                "<i>ℹ️ Note: Only dropdowns with mappings in the database were uploaded. Unmapped dropdowns were skipped.</i>",
+                ParagraphStyle(
+                    name='ModeNote',
+                    parent=self.styles['Normal'],
+                    fontSize=7,
+                    textColor=colors.HexColor('#2b6cb0'),
+                    spaceAfter=4
+                )
+            ))
         story.append(Spacer(1, 6))
         
         # === DELETION DETAILS BY PORTAL ===
         if deletion_details and db_upload_success:
-            story.append(self._create_section_header("🗑️ Deletion Details by Portal"))
+            story.append(self._create_section_header("🗑️ Deleted Dropdown Names by Portal"))
 
             # Table: one row per portal with rows-deleted summary
             deletion_table_data = [['Portal', 'Rows Deleted']]
@@ -269,6 +289,14 @@ class ExtractionReportGenerator:
 
             # Full dropdown-name lists rendered as wrapped paragraphs AFTER the table
             # (allows long lists to flow across pages without creating an oversized table cell)
+            story.append(Paragraph("<b>Deleted Dropdown Names:</b>", ParagraphStyle(
+                name='DeletedHeader',
+                parent=self.styles['Normal'],
+                fontSize=8,
+                textColor=colors.HexColor('#2d3748'),
+                spaceBefore=4,
+                spaceAfter=2
+            )))
             for company, details in deletion_details.items():
                 dropdown_names = details.get('dropdown_names', [])
                 names_text = ', '.join(dropdown_names) if dropdown_names else 'None'
@@ -280,6 +308,38 @@ class ExtractionReportGenerator:
                     textColor=colors.HexColor('#2d3748')
                 )))
                 story.append(Spacer(1, 2))
+            story.append(Spacer(1, 4))
+        
+        # === INSERTED DROPDOWN NAMES BY PORTAL ===
+        if mapping_details and mapping_details.get('inserted_dropdown_names') and db_upload_success:
+            story.append(self._create_section_header("📥 Inserted Dropdown Names by Portal"))
+            
+            inserted_dropdowns = mapping_details.get('inserted_dropdown_names', {})
+            only_mapped = mapping_details.get('only_mapped_mode', False)
+            
+            if only_mapped:
+                story.append(Paragraph(
+                    "<i>ℹ️ Only mapped dropdowns were inserted (unmapped dropdowns were skipped)</i>",
+                    ParagraphStyle(
+                        name='InsertedModeNote',
+                        parent=self.styles['Normal'],
+                        fontSize=7,
+                        textColor=colors.HexColor('#2b6cb0'),
+                        spaceAfter=4
+                    )
+                ))
+            
+            for company, dropdown_names in inserted_dropdowns.items():
+                names_text = ', '.join(dropdown_names) if dropdown_names else 'None'
+                story.append(Paragraph(f"<b>{company}:</b> {names_text}", ParagraphStyle(
+                    name='InsertedDropdownPara',
+                    parent=self.styles['Normal'],
+                    fontSize=8,
+                    alignment=TA_LEFT,
+                    textColor=colors.HexColor('#276749')
+                )))
+                story.append(Spacer(1, 2))
+            story.append(Spacer(1, 4))
 
         # === DROPDOWN MAPPING DETAILS BY PORTAL ===
         if mapping_details and mapping_details.get('applied_mappings') and db_upload_success:
@@ -287,6 +347,7 @@ class ExtractionReportGenerator:
             
             applied_mappings = mapping_details.get('applied_mappings', {})
             unmapped_names = mapping_details.get('unmapped_names', {})
+            only_mapped = mapping_details.get('only_mapped_mode', False)
             
             for company, mappings in applied_mappings.items():
                 if mappings:
@@ -314,14 +375,15 @@ class ExtractionReportGenerator:
                     story.append(self._create_mapping_table(mapping_table_data))
                     story.append(Spacer(1, 2))
                     
-                    # Unmapped fields count
+                    # Unmapped fields count - indicate if they were skipped
                     company_unmapped = unmapped_names.get(company, [])
                     if company_unmapped:
                         unmapped_preview = ', '.join(company_unmapped[:5])
                         if len(company_unmapped) > 5:
                             unmapped_preview += f", ... (+{len(company_unmapped) - 5} more)"
+                        skip_status = "SKIPPED - not uploaded" if only_mapped else "uploaded with original names"
                         story.append(Paragraph(
-                            f"<i>⚠️ Unmapped fields ({len(company_unmapped)}): {unmapped_preview}</i>",
+                            f"<i>⚠️ Unmapped fields ({len(company_unmapped)}) - {skip_status}: {unmapped_preview}</i>",
                             ParagraphStyle(
                                 name='UnmappedText',
                                 parent=self.styles['Normal'],
@@ -331,8 +393,9 @@ class ExtractionReportGenerator:
                             )
                         ))
                 else:
+                    skip_note = " - all records SKIPPED" if only_mapped else ""
                     story.append(Paragraph(
-                        f"<b>{company}</b> - No mappings applied (using original names)",
+                        f"<b>{company}</b> - No mappings applied{skip_note}",
                         ParagraphStyle(
                             name='NoMappingText',
                             parent=self.styles['Normal'],

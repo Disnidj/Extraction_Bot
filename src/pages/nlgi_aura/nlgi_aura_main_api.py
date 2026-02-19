@@ -113,9 +113,20 @@ async def run_nlgi_aura_api_extraction(playwright: Playwright, output_dir: str =
     print(f"   JSON: {json_file}")
     print(f"   TEXT: {text_file}")
     
-    print("\n✅ NLGI Aura extraction completed!")
+    # Check for errors during extraction
+    errors = results.get("errors", [])
+    if errors:
+        print("\n" + "=" * 60)
+        print("⚠️ EXTRACTION ERRORS")
+        print("=" * 60)
+        for error in errors:
+            print(f"   ❌ {error}")
+        nlgi_aura_logger.error(f"Extraction completed with {len(errors)} error(s): {errors}")
+        print("\n❌ NLGI Aura extraction completed with errors!")
+        return {"success": False, "results": results, "errors": errors}
     
-    return results
+    print("\n✅ NLGI Aura extraction completed!")
+    return {"success": True, "results": results, "errors": []}
 
 
 async def main():

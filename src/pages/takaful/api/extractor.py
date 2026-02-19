@@ -25,6 +25,7 @@ class TakafulAPIExtractor:
         """
         self.auth = auth
         self.results = None
+        self.errors = []  # Track errors during extraction
     
     async def extract_all_benefits(self):
         """
@@ -33,17 +34,19 @@ class TakafulAPIExtractor:
         Also extracts Industry Categories (Business Nature) as Pre-Level.
         
         Returns:
-            dict: Complete extraction results
+            dict: Complete extraction results with errors tracked
         """
         takaful_logger.info("="*60)
         takaful_logger.info("🚀 TAKAFUL API EXTRACTION STARTED")
         takaful_logger.info("="*60)
         
+        self.errors = []  # Reset errors for new extraction
         self.results = {
             "portal": "TAKAFUL EMARAT",
             "extracted_at": datetime.now().isoformat(),
             "industry_categories": [],
-            "groups": {}  # Hierarchical structure matching other portals
+            "groups": {},  # Hierarchical structure matching other portals
+            "errors": []  # Will be populated at the end
         }
         
         async with TakafulAPIClient(self.auth) as client:
@@ -73,6 +76,15 @@ class TakafulAPIExtractor:
             all_groups = await client.get_groups(version_id=TAKAFUL_MAPPING["version_id"])
             takaful_logger.info(f"Found {len(all_groups)} groups from API")
             
+            # Check if API returned empty (could be server error)
+            if not all_groups:
+                error_msg = f"API returned no groups - possible server error or connectivity issue"
+                takaful_logger.error(error_msg)
+                self.errors.append(error_msg)
+                print(f"   ❌ {error_msg}")
+                self.results["errors"] = self.errors
+                return self.results
+            
             # Find the matching group by name
             matching_group = None
             for g in all_groups:
@@ -81,9 +93,12 @@ class TakafulAPIExtractor:
                     break
             
             if not matching_group:
-                takaful_logger.error(f"Group '{target_group_name}' not found in API response!")
-                print(f"   ❌ Group '{target_group_name}' not found!")
+                error_msg = f"Group '{target_group_name}' not found in API response!"
+                takaful_logger.error(error_msg)
+                self.errors.append(error_msg)
+                print(f"   ❌ {error_msg}")
                 print(f"   Available groups: {[g.get('group_name') for g in all_groups]}")
+                self.results["errors"] = self.errors
                 return self.results
             
             # Use group_id from API response (not hardcoded)
@@ -103,6 +118,8 @@ class TakafulAPIExtractor:
             )
             self.results["groups"][group_name] = group_results
         
+        # Add any errors to results
+        self.results["errors"] = self.errors
         return self.results
     
     async def _extract_group_data(self, client, group_name, group_id, reinsurer_company_id):

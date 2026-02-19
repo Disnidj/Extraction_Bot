@@ -32,7 +32,7 @@ class LoginPage:
                 
                 if retry_count < max_retries:
                     qatar_logger.debug(f"Retrying login (attempt {retry_count + 1}/{max_retries})")
-                    await asyncio.sleep(5)  # Wait before retry
+                    await asyncio.sleep(2)  # Wait before retry (reduced from 5s)
                 else:
                     qatar_logger.error(f"Login failed after {max_retries} attempts")
                     return False
@@ -71,7 +71,7 @@ class LoginPage:
         # Verify login success by checking for the presence of "Create new quote" button
         try:
             # Wait for the main dashboard to load with "Create new quote" button
-            await self.page.wait_for_selector('text="Create new quote"', timeout=90000)
+            await self.page.wait_for_selector('text="Create new quote"', timeout=45000)
             qatar_logger.debug("Login Success - Dashboard loaded with 'Create new quote' button visible")
         except Exception as e:
             qatar_logger.error(f"Login verification failed - Dashboard not loaded properly: {e}")

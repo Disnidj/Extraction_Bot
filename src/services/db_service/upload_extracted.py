@@ -24,6 +24,11 @@ MAPPING_TABLE = "Medical_CTN_Portal_Field_Mapping"
 # Batch size for inserts
 BATCH_SIZE = 100
 
+# Upload only records that have dropdown mappings in the database
+# When True: Unmapped dropdowns are skipped (not uploaded) - recommended for clean data
+# When False: All dropdowns are uploaded (mapped ones renamed, unmapped keep original names)
+ONLY_UPLOAD_MAPPED = True
+
 # Company name standardization mapping
 # Maps formatter names to standard database names
 COMPANY_NAME_MAPPING = {
@@ -108,21 +113,25 @@ def load_dropdown_mappings(db, company: str) -> Dict[str, str]:
     return mappings
 
 
-def apply_dropdown_mapping(records: List[Dict], mappings: Dict[str, str]) -> Tuple[int, int, Dict[str, str], set]:
+def apply_dropdown_mapping(records: List[Dict], mappings: Dict[str, str], only_mapped: bool = True) -> Tuple[List[Dict], int, int, Dict[str, str], set]:
     """
     Apply dropdown name mappings to records.
     
     Args:
         records: List of record dictionaries
         mappings: Dict mapping {portal_dropdown_name: standard_dropdown_name}
+        only_mapped: If True, return only records that have a mapping (skip unmapped)
         
     Returns:
-        Tuple of (mapped_count, unmapped_count, applied_mappings, unmapped_names)
+        Tuple of (filtered_records, mapped_count, unmapped_count, applied_mappings, unmapped_names)
+        - filtered_records: Records to upload (only mapped if only_mapped=True)
+        - mapped_count: Number of records that were mapped
+        - unmapped_count: Number of records that were not mapped
         - applied_mappings: Dict of {portal_name: db_name} that were actually applied
         - unmapped_names: Set of dropdown names that had no mapping
     """
-    mapped_count = 0
-    unmapped_count = 0
+    mapped_records = []
+    unmapped_records = []
     unmapped_names = set()
     applied_mappings = {}  # Track which mappings were actually used
     
@@ -134,21 +143,26 @@ def apply_dropdown_mapping(records: List[Dict], mappings: Dict[str, str]) -> Tup
         if original_name in mappings:
             new_name = mappings[original_name]
             record["Dropdown_Name"] = new_name
-            mapped_count += 1
+            mapped_records.append(record)
             # Track the mapping (only add once per unique original name)
             if original_name not in applied_mappings:
                 applied_mappings[original_name] = new_name
         elif original_name_stripped in mappings:
             new_name = mappings[original_name_stripped]
             record["Dropdown_Name"] = new_name
-            mapped_count += 1
+            mapped_records.append(record)
             if original_name_stripped not in applied_mappings:
                 applied_mappings[original_name_stripped] = new_name
         else:
-            unmapped_count += 1
+            unmapped_records.append(record)
             unmapped_names.add(original_name)
     
-    return mapped_count, unmapped_count, applied_mappings, unmapped_names
+    # Return only mapped records if only_mapped is True
+    if only_mapped:
+        return mapped_records, len(mapped_records), len(unmapped_records), applied_mappings, unmapped_names
+    else:
+        # Return all records (mapped ones have been renamed, unmapped keep original names)
+        return mapped_records + unmapped_records, len(mapped_records), len(unmapped_records), applied_mappings, unmapped_names
 
 
 def parse_extracted_file(file_path: str) -> List[Dict]:
@@ -287,21 +301,30 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
             # Apply mapping only to filtered records
             mappings = load_dropdown_mappings(db, company)
             if mappings:
-                mapped, unmapped, applied_mappings, unmapped_names = apply_dropdown_mapping(filtered_records, mappings)
+                # Use ONLY_UPLOAD_MAPPED to control whether unmapped records are included
+                records_to_upload, mapped, unmapped, applied_mappings, unmapped_names = apply_dropdown_mapping(
+                    filtered_records, mappings, only_mapped=ONLY_UPLOAD_MAPPED
+                )
                 total_mapped += mapped
                 total_unmapped += unmapped
                 all_applied_mappings[company] = applied_mappings
                 all_unmapped_names[company] = unmapped_names
-                print(f"      • Mapped: {mapped}, Unmapped: {unmapped}")
+                
+                if ONLY_UPLOAD_MAPPED:
+                    print(f"      • Mapped: {mapped} records → TO BE UPLOADED")
+                    print(f"      • Unmapped: {unmapped} records → SKIPPED (not in mapping table)")
+                else:
+                    print(f"      • Mapped: {mapped}, Unmapped: {unmapped}")
             else:
-                print(f"      • No mappings found, using original names")
+                print(f"      • No mappings found - SKIPPING all records for {company}")
                 all_applied_mappings[company] = {}
                 all_unmapped_names[company] = set(r.get("Dropdown_Name", "") for r in filtered_records)
+                records_to_upload = [] if ONLY_UPLOAD_MAPPED else filtered_records
             
             # Note: TPA/Network expansion is now done in the formatter when writing the txt file
             # No need to expand here anymore
             
-            all_records.extend(filtered_records)
+            all_records.extend(records_to_upload)
         
         # Get unique dropdown names being inserted
         unique_dropdowns = set(r.get("Dropdown_Name", "") for r in all_records if r.get("Dropdown_Name", ""))
@@ -327,7 +350,8 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
             # Show unmapped names (limited to first 10)
             unmapped = all_unmapped_names.get(company, set())
             if unmapped:
-                print(f"\n      ⚠️ Unmapped fields ({len(unmapped)}):")
+                skip_status = "SKIPPED" if ONLY_UPLOAD_MAPPED else "uploaded with original names"
+                print(f"\n      ⚠️ Unmapped fields ({len(unmapped)}) - {skip_status}:")
                 for i, name in enumerate(sorted(unmapped)[:10]):
                     name_display = (name[:60] + '...') if len(name) > 60 else name
                     print(f"         • {name_display}")
@@ -336,9 +360,13 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         
         print(f"\n   {'='*70}")
         print(f"   📊 MAPPING TOTALS:")
-        print(f"      • Total mapped: {total_mapped}")
-        print(f"      • Total unmapped: {total_unmapped}")
+        print(f"      • Mode: {'ONLY MAPPED DROPDOWNS' if ONLY_UPLOAD_MAPPED else 'ALL DROPDOWNS'}")
+        print(f"      • Total mapped records: {total_mapped}")
+        print(f"      • Total unmapped records: {total_unmapped}" + (" (SKIPPED)" if ONLY_UPLOAD_MAPPED else ""))
+        print(f"      • Records to upload: {len(all_records)}")
         print(f"      • Unique dropdown fields to insert: {len(unique_dropdowns)}")
+        if ONLY_UPLOAD_MAPPED:
+            print(f"      ℹ️  Note: Only mapped dropdowns will be uploaded and deleted")
         print(f"   {'='*70}")
         
         db.connection.autocommit = False  # Start transaction
@@ -432,18 +460,47 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         print(f"✅ DATABASE UPLOAD COMPLETED SUCCESSFULLY")
         print(f"=" * 70)
         print(f"   📊 FINAL SUMMARY:")
+        print(f"      • Mode: {'ONLY MAPPED DROPDOWNS' if ONLY_UPLOAD_MAPPED else 'ALL DROPDOWNS'}")
         print(f"      • Companies processed: {len(records_by_company)}")
         print(f"      • Total rows deleted: {total_deleted}")
         print(f"      • Total rows inserted: {rows_inserted}")
         print(f"      • Unique dropdown fields: {len(unique_dropdowns)}")
-        print(f"   ⏱️  Duration: {minutes}m {seconds:.2f}s")
+        if ONLY_UPLOAD_MAPPED:
+            print(f"      ℹ️  Note: Only mapped dropdowns were uploaded/deleted")
+        
+        # Show inserted dropdown names per company
+        print(f"\n   📋 INSERTED DROPDOWN NAMES:")
+        for company in records_by_company.keys():
+            company_dropdowns = set(
+                r.get("Dropdown_Name", "") 
+                for r in all_records 
+                if r.get("Company") == company and r.get("Dropdown_Name", "")
+            )
+            if company_dropdowns:
+                print(f"      🏢 {company}: {', '.join(sorted(company_dropdowns))}")
+            else:
+                print(f"      🏢 {company}: None")
+        
+        print(f"\n   ⏱️  Duration: {minutes}m {seconds:.2f}s")
         print(f"   🕐 End Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"=" * 70)
         
         # Build mapping details for report
+        # Include inserted dropdown names per company for the report
+        inserted_dropdowns_by_company = {}
+        for company in records_by_company.keys():
+            company_dropdowns = set(
+                r.get("Dropdown_Name", "") 
+                for r in all_records 
+                if r.get("Company") == company and r.get("Dropdown_Name", "")
+            )
+            inserted_dropdowns_by_company[company] = sorted(company_dropdowns)
+        
         mapping_details = {
             'applied_mappings': all_applied_mappings,  # {company: {portal_name: db_name}}
-            'unmapped_names': {k: list(v) for k, v in all_unmapped_names.items()}  # Convert sets to lists
+            'unmapped_names': {k: list(v) for k, v in all_unmapped_names.items()},  # Convert sets to lists
+            'only_mapped_mode': ONLY_UPLOAD_MAPPED,  # Whether only mapped dropdowns were uploaded
+            'inserted_dropdown_names': inserted_dropdowns_by_company  # {company: [dropdown_names]}
         }
         
         return True, rows_inserted, f"Successfully uploaded {rows_inserted} records in {minutes}m {seconds:.2f}s", deletion_details, mapping_details

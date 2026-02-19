@@ -115,7 +115,20 @@ async def run_qatar_api_extraction(playwright: Playwright, output_dir: str = "ex
     print(f"   JSON: {json_file}")
     print(f"   TEXT: {text_file}")
     
-    return results
+    # Check for errors during extraction
+    errors = results.get("errors", [])
+    if errors:
+        print("\n" + "=" * 60)
+        print("⚠️ EXTRACTION ERRORS")
+        print("=" * 60)
+        for error in errors:
+            print(f"   ❌ {error}")
+        qatar_logger.error(f"Extraction completed with {len(errors)} error(s): {errors}")
+        print("\n❌ Qatar extraction completed with errors!")
+        return {"success": False, "results": results, "errors": errors}
+    
+    print("\n✅ Qatar extraction completed!")
+    return {"success": True, "results": results, "errors": []}
 
 
 async def main():

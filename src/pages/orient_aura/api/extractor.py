@@ -31,6 +31,7 @@ class OrientAuraAPIExtractor:
         """
         self.auth = auth
         self.results = None
+        self.errors = []  # Track errors during extraction
     
     async def extract_all_benefits(self):
         """
@@ -41,17 +42,19 @@ class OrientAuraAPIExtractor:
         - Groups → Emirates → TPAs → Plans → Benefits
         
         Returns:
-            dict: Complete extraction results
+            dict: Complete extraction results with errors tracked
         """
         orient_aura_logger.info("="*60)
         orient_aura_logger.info("🚀 ORIENT AURA API EXTRACTION STARTED")
         orient_aura_logger.info("="*60)
         
+        self.errors = []  # Reset errors for new extraction
         self.results = {
             "portal": "ORIENT AURA",
             "extracted_at": datetime.now().isoformat(),
             "industry_categories": [],
-            "groups": {}
+            "groups": {},
+            "errors": []  # Will be populated at the end
         }
         
         async with OrientAuraAPIClient(self.auth) as client:
@@ -81,6 +84,15 @@ class OrientAuraAPIExtractor:
             all_groups = await client.get_groups(version_id=ORIENT_MAPPING["version_id"])
             orient_aura_logger.info(f"Found {len(all_groups)} groups from API")
             
+            # Check if API returned empty (could be server error)
+            if not all_groups:
+                error_msg = f"API returned no groups - possible server error or connectivity issue"
+                orient_aura_logger.error(error_msg)
+                self.errors.append(error_msg)
+                print(f"   ❌ {error_msg}")
+                self.results["errors"] = self.errors
+                return self.results
+            
             # Find the matching group by name
             matching_group = None
             for g in all_groups:
@@ -89,9 +101,12 @@ class OrientAuraAPIExtractor:
                     break
             
             if not matching_group:
-                orient_aura_logger.error(f"Group '{target_group_name}' not found in API response!")
-                print(f"   ❌ Group '{target_group_name}' not found!")
+                error_msg = f"Group '{target_group_name}' not found in API response!"
+                orient_aura_logger.error(error_msg)
+                self.errors.append(error_msg)
+                print(f"   ❌ {error_msg}")
                 print(f"   Available groups: {[g.get('group_name') for g in all_groups]}")
+                self.results["errors"] = self.errors
                 return self.results
             
             # Use group_id from API response (not hardcoded)
@@ -111,6 +126,8 @@ class OrientAuraAPIExtractor:
             )
             self.results["groups"][group_name] = group_results
         
+        # Add any errors to results
+        self.results["errors"] = self.errors
         return self.results
     
     async def _extract_group_data(self, client, group_name, group_id, reinsurer_company_id):
