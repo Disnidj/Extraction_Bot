@@ -267,8 +267,8 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         all_unmapped_names = {}    # {company: set of unmapped names}
         
         # Dropdown names to skip (hierarchy fields and unwanted fields)
-        # Note: TPA and Network are now added as proper Dropdown_Name records that should be inserted
-        SKIP_DROPDOWN_NAMES = {""}
+        # Keep TPA and Network out of the insert batch (they are handled separately)
+        SKIP_DROPDOWN_NAMES = {"", "TPA", "Network"}
         
         for company, records in records_by_company.items():
             print(f"\n   📋 {company}:")
