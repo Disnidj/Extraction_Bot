@@ -62,6 +62,12 @@ NLGI_AURA_PASSWORD = config['nlgi_aura']['password']
 NLGI_AURA_QUOTATION_DIR = config['nlgi_aura']['quotation_download_dir']
 NLGI_AURA_GENERATED_CENSUS_DIR = config['nlgi_aura']['generated_census_dir']
 NLGI_AURA_TEMPLATES_DIR = config['nlgi_aura']['templates_dir']
+
+QIC_HEALTHX_EMAIL = config['qic_healthx']['email']
+QIC_HEALTHX_PASSWORD = config['qic_healthx']['password']
+QIC_HEALTHX_QUOTATION_DIR = config['qic_healthx']['quotation_download_dir']
+QIC_HEALTHX_GENERATED_CENSUS_DIR = config['qic_healthx']['generated_census_dir']
+QIC_HEALTHX_TEMPLATES_DIR = config['qic_healthx']['templates_dir']
  
 RAK_EMAIL = config['rak']['email']
 RAK_PASSWORD = config['rak']['password']

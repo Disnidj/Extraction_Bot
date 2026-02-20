@@ -198,13 +198,14 @@ medgulf_logger = _create_logger("medgulf")
 alittihad_logger = _create_logger("alittihad")
 daman_logger = _create_logger("daman")
 gig_logger = _create_logger("gig")
+qic_healthx_logger = _create_logger("qic_healthx")
 
 # Attach the Issues handler to all existing portal loggers
 for _logger in [
     alsagr_logger, adnic_logger, dni_logger, dubaiinsurance_logger,
     ison_logger, maxhealth_logger, nlg_logger, qatar_logger, sukoon_logger,
     takaful_logger, orient_logger, orient_aura_logger, nlgi_aura_logger, rak_logger, fidelity_logger, 
-    wataniatakaful_logger, medgulf_logger, alittihad_logger, daman_logger, gig_logger
+    wataniatakaful_logger, medgulf_logger, alittihad_logger, daman_logger, gig_logger, qic_healthx_logger
 ]:
     try:
         # underlying logger is LoggerAdapter, get the actual logger object

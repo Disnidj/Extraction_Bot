@@ -32,6 +32,7 @@ from src.pages.sukoon.sukoonmain_api import run_sukoon_api_extraction
 from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
 from src.pages.orient_aura.orient_aura_main_api import run_orient_aura_api_extraction
 from src.pages.nlgi_aura.nlgi_aura_main_api import run_nlgi_aura_api_extraction
+from src.pages.qic_healthx.qic_healthx_main_api import run_qic_healthx_api_extraction
 from src.services.db_service.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
 from src.services.extraction_report.report_generator import generate_extraction_report
@@ -92,6 +93,7 @@ API_PORTAL_GROUPS = {
         {"function": run_sukoon_api_extraction, "name": "Sukoon"},
         {"function": run_orient_aura_api_extraction, "name": "Orient Aura"},
         {"function": run_nlgi_aura_api_extraction, "name": "NLGI Aura"},
+        {"function": run_qic_healthx_api_extraction, "name": "QIC HealthX Exclusive"},
     ]
 }
 

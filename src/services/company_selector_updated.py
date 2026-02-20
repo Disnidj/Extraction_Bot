@@ -33,7 +33,8 @@ COMPANY_MAPPING = {
     17: "RAK INSURANCE",
     18: "MaxHealth",
     19: "Orient Aura",
-    20: "Liva Globalcare"
+    20: "Liva Globalcare",
+    21: "QIC HealthX Exclusive"
 }
 
 # Mapping between company names and portal function names
@@ -57,7 +58,8 @@ COMPANY_TO_FUNCTION_MAPPING = {
     "RAK INSURANCE": "RAK",
     "MaxHealth": "MaxHealth",
     "Orient Aura": "Orient Aura",
-    "Liva Globalcare": "NLGI Aura"
+    "Liva Globalcare": "NLGI Aura",
+    "QIC HealthX Exclusive": "QIC HealthX Exclusive"
 }
 
 

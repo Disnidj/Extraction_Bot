@@ -55,6 +55,13 @@ nlgi_aura:
   generated_census_dir: "company_data/nlgi_aura/generated_census"
   templates_dir: "company_data/nlgi_aura/templates"
 
+qic_healthx:
+  email: "h.dumasia@lifecareinternational.com"
+  password: "welcome@123"
+  quotation_download_dir: "company_data/qic_healthx/quotation_sheets"
+  generated_census_dir: "company_data/qic_healthx/generated_census"
+  templates_dir: "company_data/qic_healthx/templates"
+
 dni:
   email: "renjith@unitrustib.com"
   password: "Unitrust@2025"
