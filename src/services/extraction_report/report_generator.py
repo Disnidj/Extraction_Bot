@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
@@ -156,41 +156,58 @@ class ExtractionReportGenerator:
             f"Generated on {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}",
             self.styles['ReportSubtitle']
         ))
-        story.append(Spacer(1, 5))
+        story.append(Spacer(1, 8))
         
-        # === RUN INFORMATION ===
-        story.append(self._create_section_header("📋 Run Information"))
-        
-        run_info_data = [
-            ['Run ID', run_timestamp],
-            ['Start Time', overall_start_time.strftime('%Y-%m-%d %H:%M:%S')],
-            ['End Time', overall_end_time.strftime('%Y-%m-%d %H:%M:%S')],
-            ['Output Folder', output_folder],
-            ['Portals Processed', ', '.join(portals_processed)]
-        ]
-        story.append(self._create_info_table(run_info_data))
-        story.append(Spacer(1, 6))
-        
-        # === PORTAL EXTRACTION SUMMARY ===
-        story.append(self._create_section_header("🔄 Portal Extraction Summary"))
+        # === COMPREHENSIVE EXECUTION SUMMARY ===
+        story.append(self._create_section_header("📊 Execution Summary"))
         
         # Calculate success/failure counts
         success_count = sum(1 for p, r in portal_results.items() if r.get('success', False))
         failure_count = len(portal_results) - success_count
+        extraction_duration = (overall_end_time - overall_start_time).total_seconds()
         
-        summary_data = [
+        # Merged comprehensive summary table with Paragraph wrapping for long values
+        portals_text = ', '.join(portals_processed)
+        portals_paragraph = Paragraph(portals_text, ParagraphStyle(
+            name='PortalsListCell',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            textColor=colors.HexColor('#2d3748'),
+            leading=10
+        ))
+        
+        output_folder_paragraph = Paragraph(output_folder, ParagraphStyle(
+            name='OutputFolderCell',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            textColor=colors.HexColor('#2d3748'),
+            leading=10
+        ))
+        
+        comprehensive_summary = [
+            ['Run ID', run_timestamp],
+            ['Start Time', overall_start_time.strftime('%Y-%m-%d %H:%M:%S')],
+            ['End Time', overall_end_time.strftime('%Y-%m-%d %H:%M:%S')],
+            ['Output Folder', output_folder_paragraph],
+            ['Portals Processed', portals_paragraph],
+            ['', ''],  # Separator row
             ['Total Portals', str(len(portals_processed))],
             ['Successful', f"{success_count}"],
             ['Failed', f"{failure_count}"],
-            ['Extraction Duration', self._format_duration(
-                (overall_end_time - overall_start_time).total_seconds()
-            )]
+            ['', ''],  # Separator row
+            ['Extraction Duration', self._format_duration(extraction_duration)],
+            ['Database Upload Duration', self._format_duration(db_upload_duration)],
+            ['Total Execution Time', self._format_duration(total_duration)]
         ]
-        story.append(self._create_info_table(summary_data, highlight_success=(1, 1), highlight_fail=(2, 1) if failure_count > 0 else None))
-        story.append(Spacer(1, 6))
+        story.append(self._create_comprehensive_summary_table(
+            comprehensive_summary, 
+            success_count, 
+            failure_count
+        ))
+        story.append(Spacer(1, 8))
         
         # === PORTAL-WISE DETAILS ===
-        story.append(self._create_section_header("📊 Portal-wise Details"))
+        story.append(self._create_section_header("� Portal-wise Extraction Details"))
         
         portal_table_data = [['Portal', 'Status', 'Duration', 'Start', 'End', 'Error']]
         portal_status_colors = []  # Track which rows need color coding
@@ -211,9 +228,18 @@ class ExtractionReportGenerator:
             start_str = start_time.strftime('%H:%M:%S') if start_time else "N/A"
             end_str = end_time.strftime('%H:%M:%S') if end_time else "N/A"
             
-            # Include brief error message (if any) in the table; keep long details in Error Details section
+            # Wrap error message in Paragraph for proper text wrapping
             error_msg = result.get('error')
-            error_display = error_msg if error_msg else ''
+            if error_msg:
+                error_display = Paragraph(error_msg, ParagraphStyle(
+                    name='ErrorCellText',
+                    parent=self.styles['Normal'],
+                    fontSize=7,
+                    textColor=colors.HexColor('#c53030'),
+                    leading=9
+                ))
+            else:
+                error_display = ''
             
             portal_table_data.append([
                 portal_name,
@@ -225,22 +251,7 @@ class ExtractionReportGenerator:
             ])
         
         story.append(self._create_portal_table(portal_table_data, portal_status_colors))
-        story.append(Spacer(1, 6))
-        
-        # === ERROR DETAILS (if any) ===
-        errors_exist = any(r.get('error') for r in portal_results.values())
-        if errors_exist:
-            story.append(self._create_section_header("⚠️ Error Details"))
-            
-            for portal_name, result in portal_results.items():
-                if result.get('error'):
-                    story.append(Paragraph(
-                        f"<b>{portal_name}:</b> {result['error']}",
-                        self.styles['ErrorText']
-                    ))
-                    story.append(Spacer(1, 2))
-            
-            story.append(Spacer(1, 4))
+        story.append(Spacer(1, 8))
         
         # === DATABASE UPLOAD SUMMARY ===
         story.append(self._create_section_header("📤 Database Upload Summary"))
@@ -275,53 +286,18 @@ class ExtractionReportGenerator:
             ))
         story.append(Spacer(1, 6))
         
-        # === DELETION DETAILS BY PORTAL ===
-        if deletion_details and db_upload_success:
-            story.append(self._create_section_header("🗑️ Deleted Dropdown Names by Portal"))
-
-            # Table: one row per portal with rows-deleted summary
-            deletion_table_data = [['Portal', 'Rows Deleted']]
-            for company, details in deletion_details.items():
-                deletion_table_data.append([company, str(details.get('rows_deleted', 0))])
-
-            story.append(self._create_deletion_table(deletion_table_data))
-            story.append(Spacer(1, 4))
-
-            # Full dropdown-name lists rendered as wrapped paragraphs AFTER the table
-            # (allows long lists to flow across pages without creating an oversized table cell)
-            story.append(Paragraph("<b>Deleted Dropdown Names:</b>", ParagraphStyle(
-                name='DeletedHeader',
-                parent=self.styles['Normal'],
-                fontSize=8,
-                textColor=colors.HexColor('#2d3748'),
-                spaceBefore=4,
-                spaceAfter=2
-            )))
-            for company, details in deletion_details.items():
-                dropdown_names = details.get('dropdown_names', [])
-                names_text = ', '.join(dropdown_names) if dropdown_names else 'None'
-                story.append(Paragraph(f"<b>{company}:</b> {names_text}", ParagraphStyle(
-                    name='DropdownListPara',
-                    parent=self.styles['Normal'],
-                    fontSize=8,
-                    alignment=TA_LEFT,
-                    textColor=colors.HexColor('#2d3748')
-                )))
-                story.append(Spacer(1, 2))
-            story.append(Spacer(1, 4))
-        
-        # === INSERTED DROPDOWN NAMES BY PORTAL ===
-        if mapping_details and mapping_details.get('inserted_dropdown_names') and db_upload_success:
-            story.append(self._create_section_header("📥 Inserted Dropdown Names by Portal"))
+        # === DROPDOWN DATA REFRESH VALIDATION ===
+        if deletion_details and mapping_details and mapping_details.get('inserted_dropdown_names') and db_upload_success:
+            story.append(self._create_section_header("🔄 Dropdown Data Refresh Validation"))
             
             inserted_dropdowns = mapping_details.get('inserted_dropdown_names', {})
             only_mapped = mapping_details.get('only_mapped_mode', False)
             
             if only_mapped:
                 story.append(Paragraph(
-                    "<i>ℹ️ Only mapped dropdowns were inserted (unmapped dropdowns were skipped)</i>",
+                    "<i>ℹ️ Only mapped dropdowns were processed (unmapped dropdowns were skipped)</i>",
                     ParagraphStyle(
-                        name='InsertedModeNote',
+                        name='RefreshModeNote',
                         parent=self.styles['Normal'],
                         fontSize=7,
                         textColor=colors.HexColor('#2b6cb0'),
@@ -329,17 +305,145 @@ class ExtractionReportGenerator:
                     )
                 ))
             
-            for company, dropdown_names in inserted_dropdowns.items():
-                names_text = ', '.join(dropdown_names) if dropdown_names else 'None'
-                story.append(Paragraph(f"<b>{company}:</b> {names_text}", ParagraphStyle(
-                    name='InsertedDropdownPara',
-                    parent=self.styles['Normal'],
-                    fontSize=8,
-                    alignment=TA_LEFT,
-                    textColor=colors.HexColor('#276749')
-                )))
-                story.append(Spacer(1, 2))
+            # Compare deleted vs inserted for each portal
+            validation_table_data = [['Portal', 'Refreshed Count', 'Deleted', 'Inserted', 'Status']]
+            mismatches_found = False
+            
+            all_portals = set(deletion_details.keys()) | set(inserted_dropdowns.keys())
+            
+            for company in sorted(all_portals):
+                deleted_names = set(deletion_details.get(company, {}).get('dropdown_names', []))
+                inserted_names = set(inserted_dropdowns.get(company, []))
+                
+                deleted_count = len(deleted_names)
+                inserted_count = len(inserted_names)
+                
+                # Refreshed count = successfully replaced dropdowns (intersection)
+                refreshed_count = len(deleted_names & inserted_names)
+                
+                # Check if they match
+                if deleted_names == inserted_names:
+                    status = "✅ Match"
+                else:
+                    status = "⚠️ Mismatch"
+                    mismatches_found = True
+                
+                validation_table_data.append([
+                    company,
+                    str(refreshed_count),
+                    str(deleted_count),
+                    str(inserted_count),
+                    status
+                ])
+            
+            story.append(self._create_validation_table(validation_table_data, all_portals, deletion_details, inserted_dropdowns))
             story.append(Spacer(1, 4))
+            
+            # If mismatches found, show detailed analysis
+            if mismatches_found:
+                story.append(Paragraph(
+                    "<b>⚠️ MISMATCH DETAILS:</b>",
+                    ParagraphStyle(
+                        name='MismatchHeader',
+                        parent=self.styles['Normal'],
+                        fontSize=9,
+                        textColor=colors.HexColor('#c53030'),
+                        spaceBefore=4,
+                        spaceAfter=4
+                    )
+                ))
+                
+                for company in sorted(all_portals):
+                    deleted_names = set(deletion_details.get(company, {}).get('dropdown_names', []))
+                    inserted_names = set(inserted_dropdowns.get(company, []))
+                    
+                    if deleted_names != inserted_names:
+                        # Find differences
+                        only_deleted = deleted_names - inserted_names
+                        only_inserted = inserted_names - deleted_names
+                        
+                        story.append(Paragraph(
+                            f"<b>{company}:</b>",
+                            ParagraphStyle(
+                                name='MismatchCompany',
+                                parent=self.styles['Normal'],
+                                fontSize=8,
+                                textColor=colors.HexColor('#2d3748'),
+                                spaceBefore=3
+                            )
+                        ))
+                        
+                        if only_deleted:
+                            story.append(Paragraph(
+                                f"   ❌ Deleted but NOT inserted ({len(only_deleted)}): {', '.join(sorted(only_deleted))}",
+                                ParagraphStyle(
+                                    name='OnlyDeleted',
+                                    parent=self.styles['Normal'],
+                                    fontSize=7,
+                                    textColor=colors.HexColor('#c53030'),
+                                    leftIndent=15
+                                )
+                            ))
+                        
+                        if only_inserted:
+                            story.append(Paragraph(
+                                f"   ➕ Inserted but NOT deleted ({len(only_inserted)}): {', '.join(sorted(only_inserted))}",
+                                ParagraphStyle(
+                                    name='OnlyInserted',
+                                    parent=self.styles['Normal'],
+                                    fontSize=7,
+                                    textColor=colors.HexColor('#d69e2e'),
+                                    leftIndent=15
+                                )
+                            ))
+                        
+                        story.append(Spacer(1, 2))
+                
+                story.append(Spacer(1, 6))
+            else:
+                story.append(Paragraph(
+                    "✅ All portals: Deleted and inserted dropdowns match perfectly!",
+                    ParagraphStyle(
+                        name='AllMatch',
+                        parent=self.styles['Normal'],
+                        fontSize=9,
+                        textColor=colors.HexColor('#276749'),
+                        spaceBefore=3,
+                        spaceAfter=6
+                    )
+                ))
+            
+            # Show complete dropdown lists for reference
+            story.append(Spacer(1, 10))
+            
+            story.append(Paragraph(
+                "<b>📋 Complete Dropdown Lists by Portal</b>",
+                ParagraphStyle(
+                    name='DropdownListHeader',
+                    parent=self.styles['Normal'],
+                    fontSize=10,
+                    textColor=colors.HexColor('#2d3748'),
+                    spaceBefore=4,
+                    spaceAfter=6
+                )
+            ))
+            
+            for company in sorted(all_portals):
+                dropdown_names = sorted(inserted_dropdowns.get(company, []))
+                names_text = ', '.join(dropdown_names) if dropdown_names else 'None'
+                story.append(Paragraph(
+                    f"<b>{company}:</b> {names_text}",
+                    ParagraphStyle(
+                        name='DropdownListDetails',
+                        parent=self.styles['Normal'],
+                        fontSize=8,
+                        alignment=TA_LEFT,
+                        textColor=colors.HexColor('#4a5568'),
+                        spaceAfter=3
+                    )
+                ))
+            
+            story.append(Spacer(1, 8))
 
         # === DROPDOWN MAPPING DETAILS BY PORTAL ===
         if mapping_details and mapping_details.get('applied_mappings') and db_upload_success:
@@ -406,23 +510,8 @@ class ExtractionReportGenerator:
                         )
                     ))
 
-        story.append(self._create_section_header("🏁 Complete Process Summary"))
-        
-        extraction_duration = (overall_end_time - overall_start_time).total_seconds()
-        
-        # Create a visual timeline table
-        timeline_data = [
-            ['Phase', 'Duration', 'Percentage'],
-            ['API Extraction', self._format_duration(extraction_duration), 
-             f"{(extraction_duration/total_duration)*100:.1f}%"],
-            ['Database Upload', self._format_duration(db_upload_duration),
-             f"{(db_upload_duration/total_duration)*100:.1f}%"],
-            ['TOTAL', self._format_duration(total_duration), '100%']
-        ]
-        story.append(self._create_summary_table(timeline_data))
-        story.append(Spacer(1, 10))
-        
         # === FOOTER ===
+        story.append(Spacer(1, 12))
         story.append(Paragraph(
             "─" * 80,
             self.styles['InfoText']
@@ -446,6 +535,56 @@ class ExtractionReportGenerator:
     def _create_section_header(self, text: str) -> Paragraph:
         """Create a styled section header."""
         return Paragraph(text, self.styles['SectionHeader'])
+    
+    def _create_comprehensive_summary_table(self, data: List[List[str]], success_count: int, failure_count: int) -> Table:
+        """Create comprehensive summary table with all execution details.
+        
+        Args:
+            data: List of [label, value] pairs
+            success_count: Number of successful portals
+            failure_count: Number of failed portals
+        
+        Returns:
+            Table: Styled comprehensive summary table
+        """
+        table = Table(data, colWidths=[180, 290])
+        
+        style = [
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#edf2f7')),
+            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#2d3748')),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('PADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Top alignment for wrapped text
+        ]
+        
+        # Highlight separator rows (empty label rows)
+        for i, row in enumerate(data):
+            if row[0] == '':
+                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#cbd5e0')))
+                style.append(('LINEABOVE', (0, i), (-1, i), 1.5, colors.HexColor('#a0aec0')))
+        
+        # Highlight success count (row 7 = "Successful")
+        if success_count > 0:
+            style.append(('BACKGROUND', (1, 7), (1, 7), colors.HexColor('#c6f6d5')))
+            style.append(('TEXTCOLOR', (1, 7), (1, 7), colors.HexColor('#276749')))
+            style.append(('FONTNAME', (1, 7), (1, 7), 'Helvetica-Bold'))
+        
+        # Highlight failure count if > 0 (row 8 = "Failed")
+        if failure_count > 0:
+            style.append(('BACKGROUND', (1, 8), (1, 8), colors.HexColor('#fed7d7')))
+            style.append(('TEXTCOLOR', (1, 8), (1, 8), colors.HexColor('#c53030')))
+            style.append(('FONTNAME', (1, 8), (1, 8), 'Helvetica-Bold'))
+        
+        # Highlight total execution time (last row)
+        style.append(('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e6fffa')))
+        style.append(('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#234e52')))
+        style.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
+        style.append(('FONTSIZE', (0, -1), (-1, -1), 9))
+        
+        table.setStyle(TableStyle(style))
+        return table
     
     def _create_info_table(self, data: List[List[str]], highlight_success=None, highlight_fail=None) -> Table:
         """Create a simple info table with two columns and optional color highlighting."""
@@ -479,9 +618,14 @@ class ExtractionReportGenerator:
         return table
     
     def _create_portal_table(self, data: List[List[str]], status_colors: List[bool] = None) -> Table:
-        """Create a styled portal details table with color-coded status and error column."""
-        # Added an Error column (last) to show short failure reason
-        table = Table(data, colWidths=[90, 70, 60, 65, 65, 150])
+        """Create a styled portal details table with color-coded status and word-wrapped error column.
+        
+        Args:
+            data: Table data where error column may contain Paragraph objects for text wrapping
+            status_colors: List of booleans indicating success (True) or failure (False)
+        """
+        # Adjusted column widths to give more space to error column
+        table = Table(data, colWidths=[85, 60, 55, 60, 60, 150])
 
         style = [
             # Header row
@@ -495,9 +639,9 @@ class ExtractionReportGenerator:
             ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (0, 1), (4, -1), 'CENTER'),
             ('ALIGN', (5, 1), (5, -1), 'LEFT'),  # Error column left-aligned
-            ('PADDING', (0, 0), (-1, -1), 5),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Top alignment for better wrapping
+            ('PADDING', (0, 0), (-1, -1), 4),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]
 
         # Color-code status column based on success/failure
@@ -557,6 +701,74 @@ class ExtractionReportGenerator:
             if i % 2 == 0:
                 style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fffaf0')))
 
+        table.setStyle(TableStyle(style))
+        return table
+    
+    def _create_validation_table(self, data: List[List[str]], all_portals, deletion_details, inserted_dropdowns) -> Table:
+        """Create a validation table comparing deleted vs inserted dropdowns.
+        
+        Args:
+            data: Table data [['Portal', 'Refreshed Count', 'Deleted', 'Inserted', 'Status'], ...]
+            all_portals: Set of all portal names
+            deletion_details: Dict of deletion details
+            inserted_dropdowns: Dict of inserted dropdown names
+        
+        Returns:
+            Table: Styled validation table with color-coded status
+        """
+        table = Table(data, colWidths=[170, 85, 70, 70, 75])
+        
+        style = [
+            # Header row
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2b6cb0')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            
+            # Data rows
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
+            
+            # Borders and padding
+            ('PADDING', (0, 0), (-1, -1), 5),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+        ]
+        
+        # Color-code status column based on match/mismatch
+        for i, company in enumerate(sorted(all_portals), start=1):
+            deleted_names = set(deletion_details.get(company, {}).get('dropdown_names', []))
+            inserted_names = set(inserted_dropdowns.get(company, []))
+            
+            if deleted_names == inserted_names:
+                # Green for match
+                style.append(('BACKGROUND', (4, i), (4, i), colors.HexColor('#c6f6d5')))
+                style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#276749')))
+                style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
+                
+                # Highlight refreshed count in green too
+                style.append(('TEXTCOLOR', (1, i), (1, i), colors.HexColor('#276749')))
+                style.append(('FONTNAME', (1, i), (1, i), 'Helvetica-Bold'))
+            else:
+                # Red/Orange for mismatch
+                style.append(('BACKGROUND', (4, i), (4, i), colors.HexColor('#fed7d7')))
+                style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#c53030')))
+                style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
+                
+                # Also highlight the count columns if they differ
+                deleted_count = len(deleted_names)
+                inserted_count = len(inserted_names)
+                if deleted_count != inserted_count:
+                    style.append(('TEXTCOLOR', (2, i), (3, i), colors.HexColor('#c53030')))
+                    style.append(('FONTNAME', (2, i), (3, i), 'Helvetica-Bold'))
+        
+        # Alternate row colors for portal name column
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.append(('BACKGROUND', (0, i), (0, i), colors.HexColor('#f7fafc')))
+        
         table.setStyle(TableStyle(style))
         return table
     

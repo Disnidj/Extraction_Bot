@@ -63,23 +63,75 @@ COMPANY_TO_FUNCTION_MAPPING = {
 }
 
 
-def show_company_menu():
-    """Display the company selection menu."""
+# Companies that have API extraction implemented
+API_ENABLED_COMPANIES = [
+    "ADNIC",                    # #5
+    "TAKAFUL EMARAT",           # #2
+    "QATAR INSURANCE CO",       # #11
+    "MaxHealth",                # #18
+    "SUKOON INSURANCE",         # #9
+    "Orient Aura",              # #19
+    "Liva Globalcare",          # #20 (NLGI Aura)
+    "QIC HealthX Exclusive"     # #21
+]
+
+
+def get_filtered_company_mapping(mode='standard'):
+    """
+    Get company mapping filtered by extraction mode.
+    
+    Args:
+        mode: 'standard' shows all companies, 'api' shows only API-enabled companies
+    
+    Returns:
+        Filtered COMPANY_MAPPING dict
+    """
+    if mode == 'api':
+        return {k: v for k, v in COMPANY_MAPPING.items() if v in API_ENABLED_COMPANIES}
+    return COMPANY_MAPPING
+
+
+def show_company_menu(mode='standard'):
+    """
+    Display the company selection menu.
+    
+    Args:
+        mode: 'standard' or 'api' to filter available companies
+    """
+    filtered_mapping = get_filtered_company_mapping(mode)
+    
+    # Renumber filtered companies sequentially starting from 1
+    renumbered_mapping = {i: company for i, company in enumerate(filtered_mapping.values(), start=1)}
+    
+    mode_label = "API Extraction" if mode == 'api' else "Standard Extraction"
     print("\n" + "=" * 70)
-    print("🏢 COMPANY SELECTION - Choose Insurance Company(s) to Run")
+    print(f"🏢 COMPANY SELECTION - {mode_label} Mode")
     print("=" * 70)
     print(f"{'#':<4} {'Company Name':<45} {'Portal':<15}")
     print("-" * 70)
-    for num, company in COMPANY_MAPPING.items():
+    for num, company in renumbered_mapping.items():
         portal_name = COMPANY_TO_FUNCTION_MAPPING.get(company, company)
         print(f"{num:<4} {company:<45} {portal_name:<15}")
     print("-" * 70)
     print(f"{'0':<4} {'Exit':<45}")
     print("=" * 70)
+    
+    if mode == 'api':
+        print(f"\n💡 Showing {len(renumbered_mapping)} companies with API extraction available")
 
 
-def get_user_selection():
-    """Get user selection for company processing from command line."""
+def get_user_selection(mode='standard'):
+    """
+    Get user selection for company processing from command line.
+    
+    Args:
+        mode: 'standard' or 'api' to filter available companies
+    """
+    filtered_mapping = get_filtered_company_mapping(mode)
+    
+    # Renumber filtered companies sequentially starting from 1
+    renumbered_mapping = {i: company for i, company in enumerate(filtered_mapping.values(), start=1)}
+    
     while True:
         print("\n📝 How to select:")
         print("   • Single company:    Enter number (e.g., 2)")
@@ -96,7 +148,7 @@ def get_user_selection():
         
         # All companies
         if user_input == 'all':
-            selected = list(COMPANY_MAPPING.values())
+            selected = list(renumbered_mapping.values())
             print(f"\n✅ Selected ALL {len(selected)} companies")
             if _confirm_selection(selected):
                 return selected
@@ -109,14 +161,15 @@ def get_user_selection():
             # Remove duplicates while preserving order
             nums = list(dict.fromkeys(nums))
             
-            # Validate numbers
-            invalid_nums = [n for n in nums if n not in COMPANY_MAPPING]
+            # Validate numbers against renumbered mapping
+            invalid_nums = [n for n in nums if n not in renumbered_mapping]
             if invalid_nums:
                 print(f"\n❌ Invalid number(s): {invalid_nums}")
-                print(f"   Valid range: 1-{len(COMPANY_MAPPING)}")
+                valid_nums = sorted(renumbered_mapping.keys())
+                print(f"   Valid options: {', '.join(map(str, valid_nums))}")
                 continue
             
-            selected = [COMPANY_MAPPING[n] for n in nums]
+            selected = [renumbered_mapping[n] for n in nums]
             
             if _confirm_selection(selected):
                 return selected
@@ -205,10 +258,13 @@ def filter_portal_list(portal_list, selected_companies):
     return filtered
 
 
-def get_company_selection():
+def get_company_selection(mode='standard'):
     """
     Main function - shows menu and returns selected companies.
     No database connection needed.
+    
+    Args:
+        mode: 'standard' for all companies, 'api' for API-enabled only
     
     Returns:
         List of selected company names
@@ -216,15 +272,24 @@ def get_company_selection():
     # Check for previous selection
     previous = load_previous_selection()
     if previous:
-        print(f"\n📁 Found previous selection: {', '.join(previous)}")
-        use_previous = input("   Use previous selection? (y/n): ").strip().lower()
-        if use_previous == 'y':
-            print(f"\n✅ Using previous selection: {len(previous)} company(s)")
-            return previous
+        # Validate previous selection against current mode
+        filtered_mapping = get_filtered_company_mapping(mode)
+        valid_previous = [c for c in previous if c in filtered_mapping.values()]
+        
+        if valid_previous:
+            print(f"\n📁 Found previous selection: {', '.join(valid_previous)}")
+            if len(valid_previous) < len(previous):
+                removed = [c for c in previous if c not in valid_previous]
+                print(f"   ⚠️  Filtered out (not available in {mode} mode): {', '.join(removed)}")
+            
+            use_previous = input("   Use previous selection? (y/n): ").strip().lower()
+            if use_previous == 'y':
+                print(f"\n✅ Using previous selection: {len(valid_previous)} company(s)")
+                return valid_previous
     
     # Show menu and get new selection
-    show_company_menu()
-    selected_companies = get_user_selection()
+    show_company_menu(mode)
+    selected_companies = get_user_selection(mode)
     return selected_companies
 
 

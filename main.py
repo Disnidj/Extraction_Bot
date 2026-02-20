@@ -511,8 +511,8 @@ if __name__ == "__main__":
         # Ask for extraction mode
         extraction_mode = get_extraction_mode()
         
-        # Interactive company selection
-        selected_companies = get_company_selection()
+        # Interactive company selection (filtered by mode)
+        selected_companies = get_company_selection(mode=extraction_mode)
         
         if not selected_companies:
             print("\n❌ No companies selected. Exiting.")
