@@ -94,7 +94,7 @@ async def run_maxhealth_api_extraction(playwright: Playwright, output_dir: str =
     
     if result[0] is None:
         maxhealth_logger.error("Cannot proceed without auth token")
-        return None
+        return {"success": False, "results": None, "errors": ["Login failed - could not authenticate or extract token"]}
     
     auth, page, browser = result
     
@@ -116,7 +116,7 @@ async def run_maxhealth_api_extraction(playwright: Playwright, output_dir: str =
         
         if not results:
             print("❌ Failed to extract data")
-            return None
+            return {"success": False, "results": None, "errors": ["API extraction failed - no data returned"]}
         
         # Step 3: Save JSON results
         json_file = extractor.save_results(output_dir=output_dir)
@@ -132,12 +132,16 @@ async def run_maxhealth_api_extraction(playwright: Playwright, output_dir: str =
         formatter.print_summary()
         
         return {
-            "token_extracted": True, 
-            "token_length": len(auth.token),
-            "token_type": auth.token_type,
-            "json_file": json_file,
-            "txt_file": txt_file,
-            "plans_extracted": len(results.get("plans_by_combination", {}))
+            "success": True,
+            "results": {
+                "token_extracted": True, 
+                "token_length": len(auth.token),
+                "token_type": auth.token_type,
+                "json_file": json_file,
+                "txt_file": txt_file,
+                "plans_extracted": len(results.get("plans_by_combination", {}))
+            },
+            "errors": []
         }
         
     finally:

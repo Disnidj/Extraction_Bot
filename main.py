@@ -97,6 +97,11 @@ API_PORTAL_GROUPS = {
     ]
 }
 
+# === RETRY CONFIGURATION ===
+# Automatically retry failed portals before generating report
+MAX_RETRY_ATTEMPTS = 1  # Number of times to retry failed portals (0 = no retry)
+RETRY_DELAY_SECONDS = 5  # Delay between retry attempts
+
 # Census mapping functions list
 CENSUS_FUNCTIONS = [
     nlg_map_census_data, aura_map_census_data, sukoon_map_census_data,
@@ -264,6 +269,13 @@ async def run_api_extraction_mode(playwright, selected_companies):
     
     print(f"\n✅ Will extract from: {', '.join([p['name'] for p in matching_portals])}")
     
+    # Show retry configuration
+    if MAX_RETRY_ATTEMPTS > 0:
+        print(f"\n🔄 Auto-retry enabled: Failed portals will be retried {MAX_RETRY_ATTEMPTS} time(s)")
+        print(f"   Retry delay: {RETRY_DELAY_SECONDS} seconds")
+    else:
+        print(f"\n⚠️  Auto-retry disabled")
+    
     # Confirm
     confirm = input("\n▶️  Press Enter to start API extraction (or 'q' to quit): ").strip().lower()
     if confirm == 'q':
@@ -284,21 +296,28 @@ async def run_api_extraction_mode(playwright, selected_companies):
     main_execution_logger.info(f"Start Time: {overall_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     main_execution_logger.info(f"Output Folder: {run_output_dir}")
     main_execution_logger.info(f"Portals to process: {', '.join([p['name'] for p in matching_portals])}")
+    main_execution_logger.info(f"Retry Configuration: {'Enabled' if MAX_RETRY_ATTEMPTS > 0 else 'Disabled'} (Max attempts: {MAX_RETRY_ATTEMPTS + 1}, Delay: {RETRY_DELAY_SECONDS}s)")
     main_execution_logger.info(f"{'='*70}")
     
     portal_timings = {}
     portal_results = {}  # Track success/failure for PDF report
     
-    # Run extraction for each portal
+    # Run extraction for each portal (FIRST ATTEMPT)
     for portal in matching_portals:
         print(f"\n{'=' * 60}")
         print(f"🔄 Starting API extraction: {portal['name']}")
         print(f"{'=' * 60}")
         
         portal_start = datetime.now()
-        portal_timings[portal['name']] = {'start': portal_start, 'end': None, 'duration': None}
-        portal_results[portal['name']] = {'success': False, 'error': None}
-        main_execution_logger.info(f"🚀 Portal '{portal['name']}' - Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
+        portal_timings[portal['name']] = {
+            'start': portal_start, 
+            'end': None, 
+            'duration': None,
+            'first_attempt': {'start': portal_start, 'end': None, 'duration': None},
+            'retry_attempt': None
+        }
+        portal_results[portal['name']] = {'success': False, 'error': None, 'attempts': 1, 'retry_success': False}
+        main_execution_logger.info(f"🚀 Portal '{portal['name']}' - ATTEMPT 1 Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
         
         try:
             result = await portal["function"](playwright, output_dir=run_output_dir)
@@ -317,23 +336,39 @@ async def run_api_extraction_mode(playwright, selected_companies):
                 portal_results[portal['name']]['success'] = success
                 if errors:
                     portal_results[portal['name']]['error'] = "; ".join(errors)
+                elif not success:
+                    # No specific errors but failed - try to get a generic message
+                    portal_results[portal['name']]['error'] = "API extraction failed (no specific error)"
             else:
                 # Old format - truthy value means success
                 success = bool(result)
                 portal_results[portal['name']]['success'] = success
+                if not success:
+                    # Check if the result is None, False, or other falsy value
+                    if result is None:
+                        portal_results[portal['name']]['error'] = "Login failed or authentication error"
+                    elif result is False:
+                        portal_results[portal['name']]['error'] = "Extraction process returned failure"
+                    else:
+                        portal_results[portal['name']]['error'] = "Extraction returned False"
+            
+            # Update first attempt timing
+            portal_timings[portal['name']]['first_attempt']['end'] = portal_end
+            portal_timings[portal['name']]['first_attempt']['duration'] = portal_duration
             
             if success:
                 print(f"\n✅ {portal['name']} extraction completed!")
                 main_execution_logger.info(
-                    f"✅ Portal '{portal['name']}' - Completed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"✅ Portal '{portal['name']}' - ATTEMPT 1 Completed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
                     f"Duration: {portal_duration.total_seconds():.2f}s ({int(portal_duration.total_seconds() // 60)}m {int(portal_duration.total_seconds() % 60)}s)"
                 )
             else:
-                error_msg = portal_results[portal['name']].get('error') or "Extraction returned False"
+                error_msg = portal_results[portal['name']].get('error') or "Unknown extraction error"
                 portal_results[portal['name']]['error'] = error_msg
-                print(f"\n❌ {portal['name']} extraction failed!")
+                print(f"\n❌ {portal['name']} extraction failed on ATTEMPT 1!")
+                print(f"   Error: {error_msg}")
                 main_execution_logger.error(
-                    f"❌ Portal '{portal['name']}' - Failed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"❌ Portal '{portal['name']}' - ATTEMPT 1 Failed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
                     f"Duration: {portal_duration.total_seconds():.2f}s | Error: {error_msg}"
                 )
         except Exception as e:
@@ -341,11 +376,16 @@ async def run_api_extraction_mode(playwright, selected_companies):
             portal_duration = portal_end - portal_start
             portal_timings[portal['name']]['end'] = portal_end
             portal_timings[portal['name']]['duration'] = portal_duration
+            
+            # Update first attempt timing
+            portal_timings[portal['name']]['first_attempt']['end'] = portal_end
+            portal_timings[portal['name']]['first_attempt']['duration'] = portal_duration
+            
             portal_results[portal['name']]['error'] = str(e)
             
-            print(f"\n❌ Error during {portal['name']} extraction: {e}")
+            print(f"\n❌ Error during {portal['name']} ATTEMPT 1: {e}")
             main_execution_logger.error(
-                f"❌ Portal '{portal['name']}' - Error at {portal_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
+                f"❌ Portal '{portal['name']}' - ATTEMPT 1 Error at {portal_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
                 f"Duration: {portal_duration.total_seconds():.2f}s"
             )
             # Log full traceback for debugging
@@ -368,15 +408,28 @@ async def run_api_extraction_mode(playwright, selected_companies):
     main_execution_logger.info(f"{'='*70}")
     main_execution_logger.info(f"Overall End Time: {overall_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     main_execution_logger.info(f"Total Duration: {overall_duration.total_seconds():.2f}s ({int(overall_duration.total_seconds() // 60)}m {int(overall_duration.total_seconds() % 60)}s)")
-    main_execution_logger.info(f"\n📋 Portal-wise Timing:")
+    main_execution_logger.info(f"\n📋 Portal-wise Timing (Final Results):")
     
     for portal_name, timing in portal_timings.items():
         if timing['duration']:
+            result = portal_results.get(portal_name, {})
+            attempts = result.get('attempts', 1)
+            
+            # Show overall timing
             main_execution_logger.info(
                 f"  • {portal_name}: {timing['duration'].total_seconds():.2f}s "
                 f"({int(timing['duration'].total_seconds() // 60)}m {int(timing['duration'].total_seconds() % 60)}s) | "
                 f"{timing['start'].strftime('%H:%M:%S')} → {timing['end'].strftime('%H:%M:%S')}"
             )
+            
+            # If retried, show both attempts
+            if attempts > 1 and timing.get('retry_attempt'):
+                first_dur = timing['first_attempt']['duration'].total_seconds()
+                retry_dur = timing['retry_attempt']['duration'].total_seconds()
+                main_execution_logger.info(
+                    f"     └─ Attempt 1: {first_dur:.2f}s | "
+                    f"Attempt 2: {retry_dur:.2f}s"
+                )
     
     # Log portal extraction errors if any
     failed_portals = {k: v for k, v in portal_results.items() if not v.get('success') or v.get('error')}
@@ -384,9 +437,178 @@ async def run_api_extraction_mode(playwright, selected_companies):
         main_execution_logger.info(f"\n⚠️ PORTAL EXTRACTION ERRORS:")
         for portal_name, result in failed_portals.items():
             error_msg = result.get('error', 'Unknown error')
-            main_execution_logger.error(f"  ❌ {portal_name}: {error_msg}")
+            attempts = result.get('attempts', 1)
+            if attempts > 1:
+                main_execution_logger.error(f"  ❌ {portal_name} (failed both attempts): {error_msg}")
+            else:
+                main_execution_logger.error(f"  ❌ {portal_name}: {error_msg}")
     
     main_execution_logger.info(f"{'='*70}\n")
+    
+    # ============================================================
+    # AUTOMATIC RETRY FOR FAILED PORTALS
+    # ============================================================
+    if MAX_RETRY_ATTEMPTS > 0 and failed_portals:
+        failed_portal_list = [
+            portal for portal in matching_portals 
+            if not portal_results.get(portal['name'], {}).get('success', False)
+        ]
+        
+        if failed_portal_list:
+            print(f"\n{'='*70}")
+            print(f"🔄 RETRY ATTEMPT FOR FAILED PORTALS")
+            print(f"{'='*70}")
+            print(f"⚠️  {len(failed_portal_list)} portal(s) failed on first attempt")
+            print(f"🔄 Will retry: {', '.join([p['name'] for p in failed_portal_list])}")
+            print(f"⏳ Waiting {RETRY_DELAY_SECONDS} seconds before retry...")
+            print(f"{'='*70}")
+            
+            main_execution_logger.info(f"\n{'='*70}")
+            main_execution_logger.info(f"🔄 RETRY ATTEMPT FOR FAILED PORTALS")
+            main_execution_logger.info(f"{'='*70}")
+            main_execution_logger.info(f"Failed portals: {', '.join([p['name'] for p in failed_portal_list])}")
+            main_execution_logger.info(f"Retry delay: {RETRY_DELAY_SECONDS} seconds")
+            
+            # Wait before retry
+            import asyncio
+            await asyncio.sleep(RETRY_DELAY_SECONDS)
+            
+            # Retry each failed portal
+            for portal in failed_portal_list:
+                print(f"\n{'='*60}")
+                print(f"🔄 RETRY: {portal['name']} (Attempt 2/{MAX_RETRY_ATTEMPTS + 1})")
+                print(f"{'='*60}")
+                
+                retry_start = datetime.now()
+                portal_timings[portal['name']]['retry_attempt'] = {
+                    'start': retry_start,
+                    'end': None,
+                    'duration': None
+                }
+                main_execution_logger.info(f"\n🔄 Portal '{portal['name']}' - ATTEMPT 2 (Retry) Started at {retry_start.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                try:
+                    result = await portal["function"](playwright, output_dir=run_output_dir)
+                    retry_end = datetime.now()
+                    retry_duration = retry_end - retry_start
+                    
+                    # Handle different return formats
+                    if isinstance(result, dict) and "success" in result:
+                        success = result.get("success", False)
+                        errors = result.get("errors", [])
+                        if errors:
+                            error_msg = "; ".join(errors)
+                        elif not success:
+                            error_msg = "API extraction failed (no specific error)"
+                        else:
+                            error_msg = None
+                    else:
+                        success = bool(result)
+                        if not success:
+                            if result is None:
+                                error_msg = "Login failed or authentication error"
+                            elif result is False:
+                                error_msg = "Extraction process returned failure"
+                            else:
+                                error_msg = "Extraction returned False"
+                        else:
+                            error_msg = None
+                    
+                    # Update retry timing
+                    portal_timings[portal['name']]['retry_attempt']['end'] = retry_end
+                    portal_timings[portal['name']]['retry_attempt']['duration'] = retry_duration
+                    
+                    # Update results with retry information
+                    portal_results[portal['name']]['attempts'] = 2
+                    portal_results[portal['name']]['retry_success'] = success
+                    
+                    if success:
+                        # Override the original failure with retry success
+                        portal_results[portal['name']]['success'] = True
+                        portal_results[portal['name']]['error'] = None
+                        
+                        # Update overall timing to reflect retry timing
+                        portal_timings[portal['name']]['end'] = retry_end
+                        portal_timings[portal['name']]['duration'] = retry_duration
+                        
+                        print(f"\n✅ {portal['name']} ATTEMPT 2 SUCCEEDED!")
+                        main_execution_logger.info(
+                            f"✅ Portal '{portal['name']}' - ATTEMPT 2 (Retry) SUCCEEDED at {retry_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                            f"Duration: {retry_duration.total_seconds():.2f}s ({int(retry_duration.total_seconds() // 60)}m {int(retry_duration.total_seconds() % 60)}s) | "
+                            f"Total attempts: 2"
+                        )
+                    else:
+                        # Still failed after retry
+                        portal_results[portal['name']]['error'] = error_msg or portal_results[portal['name']].get('error', 'Unknown error')
+                        
+                        print(f"\n❌ {portal['name']} ATTEMPT 2 FAILED - Both attempts failed")
+                        print(f"   Error: {portal_results[portal['name']]['error']}")
+                        main_execution_logger.error(
+                            f"❌ Portal '{portal['name']}' - ATTEMPT 2 (Retry) FAILED at {retry_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                            f"Duration: {retry_duration.total_seconds():.2f}s | Error: {error_msg} | "
+                            f"Total attempts: 2 (both failed)"
+                        )
+                        
+                except Exception as e:
+                    retry_end = datetime.now()
+                    retry_duration = retry_end - retry_start
+                    
+                    # Update retry timing
+                    portal_timings[portal['name']]['retry_attempt']['end'] = retry_end
+                    portal_timings[portal['name']]['retry_attempt']['duration'] = retry_duration
+                    
+                    portal_results[portal['name']]['attempts'] = 2
+                    portal_results[portal['name']]['retry_success'] = False
+                    portal_results[portal['name']]['error'] = str(e)
+                    
+                    print(f"\n❌ Error during {portal['name']} ATTEMPT 2 (Retry): {e}")
+                    main_execution_logger.error(
+                        f"❌ Portal '{portal['name']}' - ATTEMPT 2 (Retry) Error at {retry_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
+                        f"Duration: {retry_duration.total_seconds():.2f}s | Total attempts: 2"
+                    )
+                    import traceback
+                    error_traceback = traceback.format_exc()
+                    main_execution_logger.error(f"   Traceback:\n{error_traceback}")
+            
+            # Log retry summary
+            print(f"\n{'='*70}")
+            print(f"🔄 RETRY SUMMARY")
+            print(f"{'='*70}")
+            
+            retry_success_count = sum(
+                1 for p in failed_portal_list 
+                if portal_results.get(p['name'], {}).get('retry_success', False)
+            )
+            retry_failed_count = len(failed_portal_list) - retry_success_count
+            
+            print(f"✅ Succeeded after retry: {retry_success_count}")
+            print(f"❌ Still failed: {retry_failed_count}")
+            print(f"{'='*70}\n")
+            
+            main_execution_logger.info(f"\n{'='*70}")
+            main_execution_logger.info(f"🔄 RETRY SUMMARY")
+            main_execution_logger.info(f"{'='*70}")
+            main_execution_logger.info(f"Portals retried: {len(failed_portal_list)}")
+            main_execution_logger.info(f"Succeeded after retry (Attempt 2): {retry_success_count}")
+            main_execution_logger.info(f"Still failed after retry: {retry_failed_count}")
+            
+            # List which portals succeeded on retry
+            if retry_success_count > 0:
+                retry_success_portals = [
+                    p['name'] for p in failed_portal_list 
+                    if portal_results.get(p['name'], {}).get('retry_success', False)
+                ]
+                main_execution_logger.info(f"\n✅ Succeeded on Attempt 2: {', '.join(retry_success_portals)}")
+            
+            # List which portals still failed
+            if retry_failed_count > 0:
+                still_failed_portals = [
+                    p['name'] for p in failed_portal_list 
+                    if not portal_results.get(p['name'], {}).get('retry_success', False)
+                ]
+                main_execution_logger.info(f"❌ Failed on both attempts: {', '.join(still_failed_portals)}")
+            
+            main_execution_logger.info(f"{'='*70}\n")
 
     # Upload extracted data to database
     print("\n" + "=" * 70)

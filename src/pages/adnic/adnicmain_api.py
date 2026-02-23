@@ -76,13 +76,13 @@ async def login_adnic_api(playwright: Playwright, referral_id=None, output_dir: 
         await auth.close()
         
         adnic_logger.info(f"✅ ADNIC API Extraction Complete! {len(records)} records saved to {output_path}")
-        return True
+        return {"success": True, "results": {"records": len(records)}, "errors": []}
         
     except Exception as e:
         adnic_logger.error(f"❌ ADNIC API extraction failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return {"success": False, "results": None, "errors": [f"ADNIC API extraction failed: {str(e)}"]}
         
     finally:
         if auth:

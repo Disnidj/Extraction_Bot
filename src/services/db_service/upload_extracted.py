@@ -196,7 +196,7 @@ def collect_extracted_files(output_dir: str) -> List[Tuple[str, str]]:
     return files
 
 
-def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
+def upload_to_database(output_dir: str) -> Tuple[bool, int, str, dict, dict]:
     """
     Upload all extracted data to database with transaction support.
     
@@ -213,7 +213,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
         output_dir: Base output directory containing portal subdirectories
         
     Returns:
-        Tuple of (success: bool, rows_inserted: int, message: str, deletion_details: dict)
+        Tuple of (success: bool, rows_inserted: int, message: str, deletion_details: dict, mapping_details: dict)
     """
     upload_start_time = time.time()
     
@@ -228,7 +228,7 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     print("\n📁 Collecting extracted files...")
     extracted_files = collect_extracted_files(output_dir)
     if not extracted_files:
-        return False, 0, "No extracted files found", {}
+        return False, 0, "No extracted files found", {}, {}
     
     print(f"   Found {len(extracted_files)} file(s)")
     for portal, filepath in extracted_files:
@@ -261,13 +261,13 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str]:
     print(f"   Companies: {', '.join(records_by_company.keys())}")
     
     if not records_by_company:
-        return False, 0, "No valid records found", {}
+        return False, 0, "No valid records found", {}, {}
     
     # Connect to database
     print("\n🔌 Connecting to database...")
     db = get_db_connection()
     if not db.connect():
-        return False, 0, "Failed to connect to database"
+        return False, 0, "Failed to connect to database", {}, {}
     
     try:
         # Load and apply dropdown mappings for each company

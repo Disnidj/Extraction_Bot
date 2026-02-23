@@ -166,6 +166,13 @@ class ExtractionReportGenerator:
         failure_count = len(portal_results) - success_count
         extraction_duration = (overall_end_time - overall_start_time).total_seconds()
         
+        # Calculate retry statistics
+        retry_count = sum(1 for p, r in portal_results.items() if r.get('attempts', 1) > 1)
+        retry_success_count = sum(
+            1 for p, r in portal_results.items() 
+            if r.get('attempts', 1) > 1 and r.get('retry_success', False)
+        )
+        
         # Merged comprehensive summary table with Paragraph wrapping for long values
         portals_text = ', '.join(portals_processed)
         portals_paragraph = Paragraph(portals_text, ParagraphStyle(
@@ -194,11 +201,22 @@ class ExtractionReportGenerator:
             ['Total Portals', str(len(portals_processed))],
             ['Successful', f"{success_count}"],
             ['Failed', f"{failure_count}"],
+        ]
+        
+        # Add retry info if any retries occurred
+        if retry_count > 0:
+            comprehensive_summary.extend([
+                ['', ''],  # Separator
+                ['Retry Attempts', f"{retry_count}"],
+                ['Succeeded on Retry', f"{retry_success_count}"],
+            ])
+        
+        comprehensive_summary.extend([
             ['', ''],  # Separator row
             ['Extraction Duration', self._format_duration(extraction_duration)],
             ['Database Upload Duration', self._format_duration(db_upload_duration)],
             ['Total Execution Time', self._format_duration(total_duration)]
-        ]
+        ])
         story.append(self._create_comprehensive_summary_table(
             comprehensive_summary, 
             success_count, 
@@ -209,8 +227,9 @@ class ExtractionReportGenerator:
         # === PORTAL-WISE DETAILS ===
         story.append(self._create_section_header("� Portal-wise Extraction Details"))
         
-        portal_table_data = [['Portal', 'Status', 'Duration', 'Start', 'End', 'Error']]
+        portal_table_data = [['Portal', 'Status', 'Attempts', 'Duration', 'Start', 'End', 'Error']]
         portal_status_colors = []  # Track which rows need color coding
+        portal_retry_status = []  # Track retry status for special coloring
         
         for portal_name in portals_processed:
             timing = portal_timings.get(portal_name, {})
@@ -221,8 +240,28 @@ class ExtractionReportGenerator:
             duration = timing.get('duration')
             
             is_success = result.get('success', False)
-            status = "SUCCESS" if is_success else "FAILED"
-            portal_status_colors.append(is_success)
+            attempts = result.get('attempts', 1)
+            retry_success = result.get('retry_success', False)
+            
+            # Determine status text and color coding
+            if is_success:
+                if attempts > 1 and retry_success:
+                    # Succeeded after retry - use yellow/warning color
+                    status = "RETRY OK"
+                    portal_status_colors.append('retry')
+                    portal_retry_status.append(True)
+                else:
+                    # Succeeded on first attempt
+                    status = "SUCCESS"
+                    portal_status_colors.append('success')
+                    portal_retry_status.append(False)
+            else:
+                # Failed (possibly after retry)
+                status = "FAILED"
+                portal_status_colors.append('failed')
+                portal_retry_status.append(False)
+            
+            attempts_str = f"{attempts}" if attempts > 1 else "1"
             
             duration_str = self._format_duration(duration.total_seconds()) if duration else "N/A"
             start_str = start_time.strftime('%H:%M:%S') if start_time else "N/A"
@@ -244,6 +283,7 @@ class ExtractionReportGenerator:
             portal_table_data.append([
                 portal_name,
                 status,
+                attempts_str,
                 duration_str,
                 start_str,
                 end_str,
@@ -252,6 +292,141 @@ class ExtractionReportGenerator:
         
         story.append(self._create_portal_table(portal_table_data, portal_status_colors))
         story.append(Spacer(1, 8))
+        
+        # === RETRY DETAILS (if any retries occurred) ===
+        retry_portals = [p for p in portals_processed if portal_results.get(p, {}).get('attempts', 1) > 1]
+        if retry_portals:
+            story.append(self._create_section_header("🔄 Retry Attempt Details"))
+            
+            retry_success_count = sum(
+                1 for p in retry_portals 
+                if portal_results.get(p, {}).get('retry_success', False)
+            )
+            retry_failed_count = len(retry_portals) - retry_success_count
+            
+            # Summary paragraph
+            retry_summary_text = (
+                f"<b>{len(retry_portals)} portal(s)</b> failed on first attempt and were automatically retried. "
+                f"<b style='color:#276749'>{retry_success_count} succeeded</b> on second attempt, "
+                f"<b style='color:#c53030'>{retry_failed_count} failed</b> again."
+            )
+            story.append(Paragraph(retry_summary_text, ParagraphStyle(
+                name='RetrySummaryText',
+                parent=self.styles['Normal'],
+                fontSize=9,
+                spaceAfter=6,
+                textColor=colors.HexColor('#2d3748')
+            )))
+            
+            # Retry details table
+            retry_table_data = [['Portal', 'Attempt 1', 'Attempt 2', 'Final Result']]
+            
+            for portal_name in retry_portals:
+                result = portal_results.get(portal_name, {})
+                timing = portal_timings.get(portal_name, {})
+                
+                # First attempt info
+                first_attempt = timing.get('first_attempt', {})
+                first_dur = first_attempt.get('duration')
+                first_info = self._format_duration(first_dur.total_seconds()) if first_dur else "N/A"
+                
+                # Create Paragraph for first attempt
+                first_cell = Paragraph(
+                    f"<b>❌ Failed</b><br/>{first_info}",
+                    ParagraphStyle(
+                        name='RetryAttempt1Cell',
+                        parent=self.styles['Normal'],
+                        fontSize=8,
+                        textColor=colors.HexColor('#2d3748'),
+                        leading=12,
+                        alignment=1  # Center
+                    )
+                )
+                
+                # Retry attempt info
+                retry_attempt = timing.get('retry_attempt', {})
+                retry_dur = retry_attempt.get('duration')
+                retry_success = result.get('retry_success', False)
+                
+                if retry_dur:
+                    retry_status_icon = "✅ Success" if retry_success else "❌ Failed"
+                    retry_info = self._format_duration(retry_dur.total_seconds())
+                    retry_cell = Paragraph(
+                        f"<b>{retry_status_icon}</b><br/>{retry_info}",
+                        ParagraphStyle(
+                            name='RetryAttempt2Cell',
+                            parent=self.styles['Normal'],
+                            fontSize=8,
+                            textColor=colors.HexColor('#2d3748'),
+                            leading=12,
+                            alignment=1  # Center
+                        )
+                    )
+                else:
+                    retry_cell = Paragraph(
+                        "Not retried",
+                        ParagraphStyle(
+                            name='NotRetriedCell',
+                            parent=self.styles['Normal'],
+                            fontSize=8,
+                            textColor=colors.HexColor('#718096'),
+                            alignment=1
+                        )
+                    )
+                
+                # Final result
+                if result.get('success', False):
+                    final_result = "RETRY OK"
+                    final_color = colors.HexColor('#92400e')
+                    final_bg = colors.HexColor('#fef3c7')
+                else:
+                    final_result = "FAILED"
+                    final_color = colors.HexColor('#c53030')
+                    final_bg = colors.HexColor('#fed7d7')
+                
+                retry_table_data.append([
+                    portal_name,
+                    first_cell,
+                    retry_cell,
+                    final_result
+                ])
+            
+            # Create retry table
+            retry_table = Table(retry_table_data, colWidths=[120, 110, 110, 120])
+            retry_style = [
+                # Header
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d3748')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                
+                # Data rows
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('PADDING', (0, 0), (-1, -1), 5),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ]
+            
+            # Color code final results
+            for i in range(len(retry_portals)):
+                row_idx = i + 1
+                result = portal_results.get(retry_portals[i], {})
+                if result.get('success', False):
+                    # Success after retry - yellow/amber
+                    retry_style.append(('BACKGROUND', (3, row_idx), (3, row_idx), colors.HexColor('#fef3c7')))
+                    retry_style.append(('TEXTCOLOR', (3, row_idx), (3, row_idx), colors.HexColor('#92400e')))
+                    retry_style.append(('FONTNAME', (3, row_idx), (3, row_idx), 'Helvetica-Bold'))
+                else:
+                    # Failed even after retry - red
+                    retry_style.append(('BACKGROUND', (3, row_idx), (3, row_idx), colors.HexColor('#fed7d7')))
+                    retry_style.append(('TEXTCOLOR', (3, row_idx), (3, row_idx), colors.HexColor('#c53030')))
+                    retry_style.append(('FONTNAME', (3, row_idx), (3, row_idx), 'Helvetica-Bold'))
+            
+            retry_table.setStyle(TableStyle(retry_style))
+            story.append(retry_table)
+            story.append(Spacer(1, 8))
         
         # === DATABASE UPLOAD SUMMARY ===
         story.append(self._create_section_header("📤 Database Upload Summary"))
@@ -617,15 +792,15 @@ class ExtractionReportGenerator:
         table.setStyle(TableStyle(style))
         return table
     
-    def _create_portal_table(self, data: List[List[str]], status_colors: List[bool] = None) -> Table:
+    def _create_portal_table(self, data: List[List[str]], status_colors: List = None) -> Table:
         """Create a styled portal details table with color-coded status and word-wrapped error column.
         
         Args:
             data: Table data where error column may contain Paragraph objects for text wrapping
-            status_colors: List of booleans indicating success (True) or failure (False)
+            status_colors: List of status indicators ('success', 'failed', 'retry')
         """
-        # Adjusted column widths to give more space to error column
-        table = Table(data, colWidths=[85, 60, 55, 60, 60, 150])
+        # Adjusted column widths - Status column wider to fit "SUCCESS (RETRY)"
+        table = Table(data, colWidths=[65, 80, 35, 45, 45, 45, 155])
 
         style = [
             # Header row
@@ -637,23 +812,28 @@ class ExtractionReportGenerator:
 
             # Data rows
             ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ALIGN', (0, 1), (4, -1), 'CENTER'),
-            ('ALIGN', (5, 1), (5, -1), 'LEFT'),  # Error column left-aligned
+            ('ALIGN', (0, 1), (5, -1), 'CENTER'),  # Portal to End columns centered
+            ('ALIGN', (6, 1), (6, -1), 'LEFT'),  # Error column left-aligned
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Top alignment for better wrapping
             ('PADDING', (0, 0), (-1, -1), 4),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
         ]
 
-        # Color-code status column based on success/failure
+        # Color-code status column based on success/failure/retry
         if status_colors:
-            for i, is_success in enumerate(status_colors):
+            for i, status_type in enumerate(status_colors):
                 row_idx = i + 1  # Skip header row
-                if is_success:
-                    # Green for success
+                if status_type == 'success':
+                    # Green for success on first attempt
                     style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#c6f6d5')))
                     style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor('#276749')))
                     style.append(('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold'))
-                else:
+                elif status_type == 'retry':
+                    # Yellow/orange for success after retry
+                    style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#fef3c7')))
+                    style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor('#92400e')))
+                    style.append(('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold'))
+                elif status_type == 'failed':
                     # Red for failure
                     style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#fed7d7')))
                     style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor('#c53030')))
@@ -663,7 +843,8 @@ class ExtractionReportGenerator:
         for i in range(1, len(data)):
             if i % 2 == 0:
                 style.append(('BACKGROUND', (0, i), (0, i), colors.HexColor('#f7fafc')))
-                style.append(('BACKGROUND', (2, i), (4, i), colors.HexColor('#f7fafc')))
+                style.append(('BACKGROUND', (2, i), (2, i), colors.HexColor('#f7fafc')))  # Attempts
+                style.append(('BACKGROUND', (3, i), (5, i), colors.HexColor('#f7fafc')))  # Duration, Start, End
 
         table.setStyle(TableStyle(style))
         return table

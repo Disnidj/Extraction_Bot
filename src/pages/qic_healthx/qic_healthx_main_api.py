@@ -89,7 +89,7 @@ async def run_qic_healthx_api_extraction(playwright: Playwright, output_dir: str
     if not auth:
         qic_healthx_logger.error("Cannot proceed without auth token")
         print("   ❌ Login failed - cannot proceed")
-        return None
+        return {"success": False, "results": None, "errors": ["Login failed - could not authenticate or extract token"]}
     
     print("   ✓ Login successful")
     print(f"   ✓ Token extracted ({len(auth.token)} characters)")

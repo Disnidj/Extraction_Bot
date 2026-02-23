@@ -66,7 +66,7 @@ async def run_orient_aura_api_extraction(playwright: Playwright, output_dir: str
     
     if not auth:
         orient_aura_logger.error("Cannot proceed without auth token")
-        return None
+        return {"success": False, "results": None, "errors": ["Login failed - could not authenticate or extract token"]}
     
     print("✅ Login successful, token obtained")
     print(f"   Token length: {len(auth.token)} characters")

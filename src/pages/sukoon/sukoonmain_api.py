@@ -93,14 +93,14 @@ async def login_sukoon_api(playwright: Playwright, referral_id=None, output_dir:
         print(f"   Records saved: {len(records)}")
         print(f"   Output file: {output_path}")
         
-        return True
+        return {"success": True, "results": {"records": len(records)}, "errors": []}
         
     except Exception as e:
         sukoon_logger.error(f"❌ Sukoon API extraction failed: {e}")
         print(f"\n❌ Sukoon API extraction failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return {"success": False, "results": None, "errors": [f"Sukoon API extraction failed: {str(e)}"]}
         
     finally:
         if auth:
