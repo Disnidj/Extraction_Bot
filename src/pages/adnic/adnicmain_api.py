@@ -64,6 +64,29 @@ async def login_adnic_api(playwright: Playwright, referral_id=None, output_dir: 
         records = await extractor.extract_all()
         
         # =====================================================
+        # Step 6.5: Validate extraction results
+        # =====================================================
+        is_valid, validation_errors = extractor.validate_extraction()
+        
+        if not is_valid:
+            adnic_logger.error("❌ ADNIC extraction validation failed - marking portal as FAILED")
+            print("\n" + "=" * 60)
+            print("❌ ADNIC API EXTRACTION FAILED - VALIDATION ERRORS")
+            print("=" * 60)
+            for error in validation_errors:
+                print(f"   • {error}")
+            print("=" * 60)
+            print("\n⚠️  Portal will NOT proceed to staging due to incomplete data extraction.")
+            print("    This prevents corrupted data from overwriting valid database records.")
+            
+            await auth.close()
+            return {
+                "success": False, 
+                "results": None, 
+                "errors": validation_errors + ["ADNIC extraction incomplete - portal marked as FAILED"]
+            }
+        
+        # =====================================================
         # Step 7: Save results to portal-specific folder
         # Formatter creates: {output_dir}/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
         # =====================================================

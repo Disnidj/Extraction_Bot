@@ -33,7 +33,7 @@ from src.pages.maxHealth.maxHealth_main_api import run_maxhealth_api_extraction
 from src.pages.orient_aura.orient_aura_main_api import run_orient_aura_api_extraction
 from src.pages.nlgi_aura.nlgi_aura_main_api import run_nlgi_aura_api_extraction
 from src.pages.qic_healthx.qic_healthx_main_api import run_qic_healthx_api_extraction
-from src.services.db_service.upload_extracted import upload_to_database
+from src.services.db_service.api_data.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
 from src.services.extraction_report.report_generator import generate_extraction_report
 from src.utils.logger import set_current_request_id, issues_logger
@@ -616,27 +616,65 @@ async def run_api_extraction_mode(playwright, selected_companies):
     print("=" * 70)
     
     db_upload_start = datetime.now()
-    success, rows_inserted, upload_msg, deletion_details, mapping_details = upload_to_database(run_output_dir)
+    success, rows_changed, upload_msg, deletion_details, mapping_details, change_report = upload_to_database(run_output_dir)
     db_upload_end = datetime.now()
     db_upload_duration = db_upload_end - db_upload_start
     
+    # Calculate actual staging row count (total rows uploaded to staging)
+    staging_row_count = 0
+    if change_report:
+        staging_row_count = (
+            len(change_report.new_records) + 
+            len(change_report.modified_records) + 
+            len(change_report.deleted_records) + 
+            change_report.unchanged_count
+        )
+    
     if success:
-        print(f"✅ Database upload complete: {rows_inserted} rows inserted")
+        print(f"✅ Database upload complete: {rows_changed} changes applied")
+        
         main_execution_logger.info(f"\n{'='*70}")
         main_execution_logger.info(f"📤 DATABASE UPLOAD SUMMARY")
         main_execution_logger.info(f"{'='*70}")
         main_execution_logger.info(f"   Status: SUCCESS")
-        main_execution_logger.info(f"   Rows inserted: {rows_inserted}")
+        main_execution_logger.info(f"   Total changes: {rows_changed}")
         main_execution_logger.info(f"   Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
         main_execution_logger.info(f"   Start: {db_upload_start.strftime('%H:%M:%S')} → End: {db_upload_end.strftime('%H:%M:%S')}")
         
-        # Log deletion details per portal
-        if deletion_details:
-            main_execution_logger.info(f"\n   🗑️ Deletion Details by Portal:")
-            for company, details in deletion_details.items():
-                main_execution_logger.info(f"      • {company}:")
-                main_execution_logger.info(f"         - Rows deleted: {details['rows_deleted']}")
-                main_execution_logger.info(f"         - Dropdown names: {', '.join(details['dropdown_names']) if details['dropdown_names'] else 'None'}")
+        # Log change report details if available
+        if change_report:
+            main_execution_logger.info(f"\n   📊 CHANGE REPORT (Run ID: {change_report.run_id}):")
+            main_execution_logger.info(f"      • New records: {len(change_report.new_records)}")
+            main_execution_logger.info(f"      • Modified records: {len(change_report.modified_records)}")
+            main_execution_logger.info(f"      • Deleted records: {len(change_report.deleted_records)}")
+            main_execution_logger.info(f"      • Unchanged records: {change_report.unchanged_count}")
+            
+            # Log full backup file if created
+            if hasattr(change_report, 'full_backup_file') and change_report.full_backup_file:
+                backup_filename = os.path.basename(change_report.full_backup_file)
+                main_execution_logger.info(f"\n   💾 FULL TABLE BACKUP:")
+                main_execution_logger.info(f"      • File: {backup_filename}")
+                main_execution_logger.info(f"      • Location: {change_report.full_backup_file}")
+                main_execution_logger.info(f"      • Purpose: Complete disaster recovery backup")
+            
+            # Log changes by portal
+            changes_by_company = change_report.get_changes_by_company()
+            if changes_by_company:
+                main_execution_logger.info(f"\n   📋 CHANGES BY PORTAL:")
+                for company, data in changes_by_company.items():
+                    total = len(data['new']) + len(data['modified']) + len(data['deleted'])
+                    main_execution_logger.info(f"      • {company}: {total} changes")
+                    if data['new']:
+                        main_execution_logger.info(f"         - New: {len(data['new'])}")
+                    if data['modified']:
+                        main_execution_logger.info(f"         - Modified: {len(data['modified'])}")
+                    if data['deleted']:
+                        main_execution_logger.info(f"         - Deleted: {len(data['deleted'])}")
+                    # Log dropdown names
+                    if deletion_details and company in deletion_details:
+                        dropdown_names = deletion_details[company].get('dropdown_names', [])
+                        if dropdown_names:
+                            main_execution_logger.info(f"         - Dropdowns: {', '.join(dropdown_names)}")
         
         # Log mapping details per portal
         if mapping_details and mapping_details.get('applied_mappings'):
@@ -699,7 +737,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
             portal_timings=portal_timings,
             portal_results=portal_results,
             db_upload_success=success,
-            db_rows_inserted=rows_inserted,
+            db_rows_inserted=staging_row_count,  # Total rows uploaded to staging
             db_upload_duration=db_upload_duration.total_seconds(),
             db_upload_start=db_upload_start,
             db_upload_end=db_upload_end,
@@ -707,7 +745,8 @@ async def run_api_extraction_mode(playwright, selected_companies):
             output_folder=run_output_dir,
             portals_processed=[p['name'] for p in matching_portals],
             deletion_details=deletion_details,
-            mapping_details=mapping_details
+            mapping_details=mapping_details,
+            change_report=change_report
         )
         print(f"✅ PDF Report generated: {pdf_path}")
         main_execution_logger.info(f"\n{'='*70}")
@@ -715,6 +754,68 @@ async def run_api_extraction_mode(playwright, selected_companies):
         main_execution_logger.info(f"{'='*70}")
         main_execution_logger.info(f"   Report Path: {pdf_path}")
         main_execution_logger.info(f"{'='*70}\n")
+        
+        # ============================================================
+        # SEND EMAIL NOTIFICATION
+        # ============================================================
+        from src.utils.load_yaml import (
+            EXTRACTION_NOTIFICATIONS_ENABLED,
+            NOTIFICATION_RECIPIENTS_TO,
+            NOTIFICATION_RECIPIENTS_CC,
+            OUTLOOK_CLIENT_ID,
+            OUTLOOK_TENANT_ID,
+            OUTLOOK_TOKEN_CACHE_PATH
+        )
+        from src.services.email_notifications.extraction_notifier import send_extraction_success_notification
+        
+        if EXTRACTION_NOTIFICATIONS_ENABLED:
+            print("\n" + "=" * 70)
+            print("📧 EMAIL NOTIFICATION")
+            print("=" * 70)
+            
+            try:
+                # Set environment variables for the mailer
+                os.environ['OUTLOOK_CLIENT_ID'] = OUTLOOK_CLIENT_ID
+                os.environ['OUTLOOK_TENANT_ID'] = OUTLOOK_TENANT_ID
+                os.environ['OUTLOOK_TOKEN_CACHE'] = OUTLOOK_TOKEN_CACHE_PATH
+                
+                email_sent = await send_extraction_success_notification(
+                    run_timestamp=run_timestamp,
+                    overall_start_time=overall_start_time,
+                    overall_end_time=overall_end_time,
+                    portal_results=portal_results,
+                    portal_timings=portal_timings,
+                    db_upload_success=success,
+                    db_rows_inserted=staging_row_count,  # Total rows uploaded to staging
+                    db_upload_duration=db_upload_duration.total_seconds(),
+                    total_duration=total_seconds,
+                    portals_processed=[p['name'] for p in matching_portals],
+                    pdf_report_path=pdf_path,
+                    recipients_to=NOTIFICATION_RECIPIENTS_TO,
+                    recipients_cc=NOTIFICATION_RECIPIENTS_CC,
+                    logger=main_execution_logger,
+                    change_report=change_report,
+                )
+                
+                if email_sent:
+                    print(f"✅ Email notification sent successfully")
+                    print(f"   TO: {', '.join(NOTIFICATION_RECIPIENTS_TO)}")
+                    print(f"   CC: {', '.join(NOTIFICATION_RECIPIENTS_CC)}")
+                    main_execution_logger.info(f"✅ Email notification sent successfully")
+                else:
+                    print(f"⚠️ Email notification failed")
+                    main_execution_logger.warning(f"⚠️ Email notification failed")
+                    
+            except Exception as email_error:
+                print(f"❌ Failed to send email notification: {email_error}")
+                main_execution_logger.error(f"❌ Email notification error: {email_error}")
+                import traceback
+                main_execution_logger.error(f"   Traceback:\n{traceback.format_exc()}")
+                # Don't raise - email failure shouldn't stop the process
+        else:
+            print("\n📧 Email notifications are disabled in config.yaml")
+            main_execution_logger.info("📧 Email notifications are disabled")
+            
     except Exception as e:
         print(f"❌ Failed to generate PDF report: {e}")
         main_execution_logger.error(f"❌ PDF Report generation failed: {e}")

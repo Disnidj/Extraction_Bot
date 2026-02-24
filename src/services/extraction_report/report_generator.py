@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
@@ -32,35 +32,55 @@ class ExtractionReportGenerator:
         
     def _setup_custom_styles(self):
         """Setup custom paragraph styles for the report."""
-        # Title style
+        # Professional color palette
+        self.colors = {
+            'primary': colors.HexColor('#0047AB'),      # Cobalt Blue
+            'primary_dark': colors.HexColor('#003380'), # Dark Blue
+            'secondary': colors.HexColor('#2d3748'),    # Dark Gray
+            'accent': colors.HexColor('#00A86B'),       # Jade Green
+            'warning': colors.HexColor('#F59E0B'),      # Amber
+            'danger': colors.HexColor('#DC2626'),       # Red
+            'success': colors.HexColor('#059669'),      # Emerald
+            'light_bg': colors.HexColor('#F8FAFC'),     # Light Gray
+            'border': colors.HexColor('#E2E8F0'),       # Border Gray
+            'text': colors.HexColor('#1E293B'),         # Text Dark
+            'text_muted': colors.HexColor('#64748B'),   # Text Muted
+        }
+        
+        # Title style - Professional and bold
         self.styles.add(ParagraphStyle(
             name='ReportTitle',
             parent=self.styles['Heading1'],
-            fontSize=18,
-            spaceAfter=8,
+            fontSize=22,
+            spaceAfter=6,
             alignment=TA_CENTER,
-            textColor=colors.HexColor('#1a365d')
+            textColor=self.colors['primary_dark'],
+            fontName='Helvetica-Bold'
         ))
         
         # Subtitle style
         self.styles.add(ParagraphStyle(
             name='ReportSubtitle',
             parent=self.styles['Normal'],
-            fontSize=9,
-            spaceAfter=8,
+            fontSize=10,
+            spaceAfter=12,
             alignment=TA_CENTER,
-            textColor=colors.HexColor('#4a5568')
+            textColor=self.colors['text_muted']
         ))
         
-        # Section header style
+        # Section header style - More prominent
         self.styles.add(ParagraphStyle(
             name='SectionHeader',
             parent=self.styles['Heading2'],
-            fontSize=11,
-            spaceBefore=8,
-            spaceAfter=4,
-            textColor=colors.HexColor('#2d3748'),
-            borderPadding=2
+            fontSize=12,
+            spaceBefore=14,
+            spaceAfter=6,
+            textColor=self.colors['primary'],
+            fontName='Helvetica-Bold',
+            borderPadding=4,
+            leftIndent=0,
+            borderWidth=0,
+            borderColor=self.colors['primary']
         ))
         
         # Info text style
@@ -69,7 +89,7 @@ class ExtractionReportGenerator:
             parent=self.styles['Normal'],
             fontSize=8,
             spaceAfter=2,
-            textColor=colors.HexColor('#4a5568')
+            textColor=self.colors['text_muted']
         ))
         
         # Success text style
@@ -77,7 +97,7 @@ class ExtractionReportGenerator:
             name='SuccessText',
             parent=self.styles['Normal'],
             fontSize=8,
-            textColor=colors.HexColor('#276749')
+            textColor=self.colors['success']
         ))
         
         # Error text style
@@ -85,7 +105,7 @@ class ExtractionReportGenerator:
             name='ErrorText',
             parent=self.styles['Normal'],
             fontSize=8,
-            textColor=colors.HexColor('#c53030')
+            textColor=self.colors['danger']
         ))
         
     def generate_report(
@@ -104,7 +124,8 @@ class ExtractionReportGenerator:
         output_folder: str,
         portals_processed: List[str],
         deletion_details: Dict = None,
-        mapping_details: Dict = None
+        mapping_details: Dict = None,
+        change_report = None
     ) -> str:
         """
         Generate the extraction report PDF.
@@ -125,6 +146,7 @@ class ExtractionReportGenerator:
             portals_processed: List of portal names processed
             deletion_details: Dict with deletion info per portal {company: {rows_deleted, dropdown_names}}
             mapping_details: Dict with mapping info {applied_mappings: {company: {portal_name: db_name}}, unmapped_names: {company: [names]}}
+            change_report: ChangeReport object with comparison results (new/modified/deleted records)
             
         Returns:
             str: Path to generated PDF report
@@ -150,13 +172,46 @@ class ExtractionReportGenerator:
         # Build content
         story = []
         
-        # === HEADER SECTION ===
-        story.append(Paragraph("🤖 Extraction Bot Report", self.styles['ReportTitle']))
+        # === PROFESSIONAL HEADER SECTION ===
+        # Top accent line
+        story.append(HRFlowable(
+            width="100%",
+            thickness=3,
+            color=self.colors['primary'],
+            spaceBefore=0,
+            spaceAfter=12
+        ))
+        
+        story.append(Paragraph("EXTRACTION BOT", ParagraphStyle(
+            name='BrandTitle',
+            fontSize=24,
+            alignment=TA_CENTER,
+            textColor=self.colors['primary_dark'],
+            fontName='Helvetica-Bold',
+            spaceAfter=6,
+            leading=28
+        )))
+        story.append(Paragraph("Automated Data Extraction Report", ParagraphStyle(
+            name='BrandSubtitle',
+            fontSize=11,
+            alignment=TA_CENTER,
+            textColor=self.colors['text_muted'],
+            spaceAfter=4,
+            leading=14
+        )))
         story.append(Paragraph(
-            f"Generated on {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}",
+            f"Generated: {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}",
             self.styles['ReportSubtitle']
         ))
-        story.append(Spacer(1, 8))
+        
+        # Divider line
+        story.append(HRFlowable(
+            width="100%",
+            thickness=1,
+            color=self.colors['border'],
+            spaceBefore=4,
+            spaceAfter=12
+        ))
         
         # === COMPREHENSIVE EXECUTION SUMMARY ===
         story.append(self._create_section_header("📊 Execution Summary"))
@@ -278,10 +333,32 @@ class ExtractionReportGenerator:
                     leading=9
                 ))
             else:
-                error_display = ''
+                error_display = Paragraph(
+                    "No errors",
+                    ParagraphStyle(
+                        name='NoErrorText',
+                        parent=self.styles['Normal'],
+                        fontSize=8,
+                        textColor=self.colors['text_muted'],
+                        alignment=TA_CENTER
+                    )
+                )
+            
+            # Wrap portal name in Paragraph for proper word wrapping
+            portal_display = Paragraph(
+                portal_name,
+                ParagraphStyle(
+                    name='PortalCellText',
+                    parent=self.styles['Normal'],
+                    fontSize=8,
+                    textColor=colors.HexColor('#2d3748'),
+                    leading=10,
+                    wordWrap='CJK'  # Enable word wrapping
+                )
+            )
             
             portal_table_data.append([
-                portal_name,
+                portal_display,  # Wrapped portal name
                 status,
                 attempts_str,
                 duration_str,
@@ -392,7 +469,7 @@ class ExtractionReportGenerator:
                 ])
             
             # Create retry table
-            retry_table = Table(retry_table_data, colWidths=[120, 110, 110, 120])
+            retry_table = Table(retry_table_data, colWidths=[140, 110, 110, 110])
             retry_style = [
                 # Header
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d3748')),
@@ -407,6 +484,7 @@ class ExtractionReportGenerator:
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('PADDING', (0, 0), (-1, -1), 5),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+                ('WORDWRAP', (0, 0), (-1, -1), True),
             ]
             
             # Color code final results
@@ -428,8 +506,214 @@ class ExtractionReportGenerator:
             story.append(retry_table)
             story.append(Spacer(1, 8))
         
-        # === DATABASE UPLOAD SUMMARY ===
-        story.append(self._create_section_header("📤 Database Upload Summary"))
+        # === STAGING COMPARISON RESULTS ===
+        # This shows the ACTUAL changes detected by comparing staging vs original table
+        # NOT the old delete+insert counts (which are misleading)
+        if change_report and db_upload_success:
+            story.append(self._create_section_header("🔍 Staging Comparison Results"))
+            
+            # Calculate totals
+            total_new = len(change_report.new_records)
+            total_modified = len(change_report.modified_records)
+            total_deleted = len(change_report.deleted_records)
+            total_unchanged = change_report.unchanged_count
+            total_changes = total_new + total_modified + total_deleted
+            
+            # Only show table if there are changes
+            if total_changes > 0:
+                # Add explanation
+                story.append(Paragraph(
+                    "<i>ℹ️ Shows actual changes detected by comparing new extraction against existing database</i>",
+                    ParagraphStyle(
+                        name='StagingNote',
+                        parent=self.styles['Normal'],
+                        fontSize=7,
+                        textColor=colors.HexColor('#2b6cb0'),
+                        spaceAfter=6
+                    )
+                ))
+                
+                # Build comparison table
+                comparison_data = [['Portal', 'New Values', 'Modified', 'Deleted', 'Unchanged', 'Total Changes']]
+                
+                changes_by_company = change_report.get_changes_by_company()
+                
+                for company in sorted(changes_by_company.keys()):
+                    data = changes_by_company[company]
+                    new_count = len(data.get('new', []))
+                    modified_count = len(data.get('modified', []))
+                    deleted_count = len(data.get('deleted', []))
+                    
+                    # Just show the changes we know about
+                    total_changes_company = new_count + modified_count + deleted_count
+                    
+                    comparison_data.append([
+                        company,
+                        str(new_count),
+                        str(modified_count),
+                        str(deleted_count),
+                        '-',  # Not easily calculable per company
+                        str(total_changes_company)
+                    ])
+                
+                # Add totals row
+                comparison_data.append([
+                    '📊 TOTAL',
+                    str(total_new),
+                    str(total_modified),
+                    str(total_deleted),
+                    str(total_unchanged),
+                    str(total_changes)
+                ])
+                
+                story.append(self._create_staging_comparison_table(comparison_data))
+                story.append(Spacer(1, 6))
+            
+            # Summary message
+            if total_changes == 0:
+                msg = "✅ <b>No changes detected</b> - Database already up to date!"
+                msg_detail = f"<i>All {total_unchanged} records in the database match the extracted data. No updates needed.</i>"
+            else:
+                msg = f"✅ <b>{total_changes} changes applied</b> - Only modified data was updated"
+                msg_detail = f"<i>New: {total_new}, Modified: {total_modified}, Deleted: {total_deleted}, Unchanged: {total_unchanged}</i>"
+            
+            story.append(Paragraph(
+                msg,
+                ParagraphStyle(
+                    name='StagingSummary',
+                    parent=self.styles['Normal'],
+                    fontSize=10,
+                    textColor=colors.HexColor('#22543d'),
+                    spaceBefore=6,
+                    spaceAfter=2
+                )
+            ))
+            
+            story.append(Paragraph(
+                msg_detail,
+                ParagraphStyle(
+                    name='StagingDetail',
+                    parent=self.styles['Normal'],
+                    fontSize=8,
+                    textColor=colors.HexColor('#4a5568'),
+                    spaceAfter=6
+                )
+            ))
+            
+            # === DETAILED DROPDOWN CHANGES ===
+            # Show ALL specific dropdown values that changed (not just samples)
+            if total_changes > 0:
+                story.append(Spacer(1, 6))
+                story.append(self._create_section_header("📋 Detailed Dropdown Changes"))
+                
+                # Add explanation
+                story.append(Paragraph(
+                    "<i>Complete list of all values that were added, modified, or removed from the database</i>",
+                    ParagraphStyle(
+                        name='DropdownChangesNote',
+                        parent=self.styles['Normal'],
+                        fontSize=7,
+                        textColor=colors.HexColor('#4a5568'),
+                        spaceAfter=6,
+                        leftIndent=10
+                    )
+                ))
+                
+                # Get FULL summary with ALL values
+                dropdown_summary = change_report.get_dropdown_change_summary(show_all=True)
+                
+                for company in sorted(dropdown_summary.keys()):
+                    # Company subheader with box
+                    story.append(Paragraph(
+                        f"<b>▶ {company}</b>",
+                        ParagraphStyle(
+                            name='CompanySubheader',
+                            parent=self.styles['Normal'],
+                            fontSize=9,
+                            textColor=colors.HexColor('#1a365d'),
+                            backColor=colors.HexColor('#e2e8f0'),
+                            spaceBefore=8,
+                            spaceAfter=4,
+                            leftIndent=5,
+                            borderPadding=3
+                        )
+                    ))
+                    
+                    dropdowns = dropdown_summary[company]
+                    for dropdown_name in sorted(dropdowns.keys()):
+                        data = dropdowns[dropdown_name]
+                        
+                        # Build change description
+                        changes_desc = []
+                        if data['new_count'] > 0:
+                            changes_desc.append(f"<font color='#276749'><b>+{data['new_count']} new</b></font>")
+                        if data['modified_count'] > 0:
+                            changes_desc.append(f"<font color='#2c5282'><b>~{data['modified_count']} modified</b></font>")
+                        if data['deleted_count'] > 0:
+                            changes_desc.append(f"<font color='#c05621'><b>-{data['deleted_count']} deleted</b></font>")
+                        
+                        # Dropdown name with counts
+                        story.append(Paragraph(
+                            f"• <b>{dropdown_name}</b>: {', '.join(changes_desc)}",
+                            ParagraphStyle(
+                                name='DropdownName',
+                                parent=self.styles['Normal'],
+                                fontSize=8,
+                                leftIndent=15,
+                                spaceBefore=4,
+                                spaceAfter=2
+                            )
+                        ))
+                        
+                        # Show ALL values (not just samples)
+                        # NEW VALUES - show all
+                        if data['all_new']:
+                            all_new_text = ', '.join(f'"{v}"' for v in data['all_new'])
+                            story.append(Paragraph(
+                                f"<font color='#276749'><b>New Values ({len(data['all_new'])}):</b> {all_new_text}</font>",
+                                ParagraphStyle(
+                                    name='NewValues',
+                                    parent=self.styles['Normal'],
+                                    fontSize=7,
+                                    leftIndent=25,
+                                    textColor=colors.HexColor('#276749'),
+                                    spaceAfter=2
+                                )
+                            ))
+                        
+                        # DELETED VALUES - show all
+                        if data['all_deleted']:
+                            all_deleted_text = ', '.join(f'"{v}"' for v in data['all_deleted'])
+                            story.append(Paragraph(
+                                f"<font color='#c05621'><b>Deleted Values ({len(data['all_deleted'])}):</b> {all_deleted_text}</font>",
+                                ParagraphStyle(
+                                    name='DeletedValues',
+                                    parent=self.styles['Normal'],
+                                    fontSize=7,
+                                    leftIndent=25,
+                                    textColor=colors.HexColor('#c05621'),
+                                    spaceAfter=2
+                                )
+                            ))
+                        
+                        # MODIFIED VALUES - show all with old → new
+                        if data['all_modified']:
+                            mod_texts = [f'"{mod["old"]}" → "{mod["new"]}"' for mod in data['all_modified']]
+                            all_mod_text = ', '.join(mod_texts)
+                            story.append(Paragraph(
+                                f"<font color='#2c5282'><b>Modified Values ({len(data['all_modified'])}):</b> {all_mod_text}</font>",
+                                ParagraphStyle(
+                                    name='ModifiedValues',
+                                    parent=self.styles['Normal'],
+                                    fontSize=7,
+                                    leftIndent=25,
+                                    textColor=colors.HexColor('#2c5282'),
+                                    spaceAfter=2
+                                )
+                            ))
+        
+        # === STAGING UPLOAD INFO ===
+        story.append(self._create_section_header("📤 Staging Upload Info"))
         
         db_status = "SUCCESS" if db_upload_success else "FAILED"
         
@@ -440,7 +724,6 @@ class ExtractionReportGenerator:
         db_data = [
             ['Status', db_status],
             ['Upload Mode', upload_mode],
-            ['Rows Inserted', f"{db_rows_inserted:,}"],
             ['Duration', self._format_duration(db_upload_duration)],
             ['Time', f"{db_upload_start.strftime('%H:%M:%S')} → {db_upload_end.strftime('%H:%M:%S')}"]
         ]
@@ -461,165 +744,113 @@ class ExtractionReportGenerator:
             ))
         story.append(Spacer(1, 6))
         
-        # === DROPDOWN DATA REFRESH VALIDATION ===
-        if deletion_details and mapping_details and mapping_details.get('inserted_dropdown_names') and db_upload_success:
-            story.append(self._create_section_header("🔄 Dropdown Data Refresh Validation"))
-            
-            inserted_dropdowns = mapping_details.get('inserted_dropdown_names', {})
-            only_mapped = mapping_details.get('only_mapped_mode', False)
-            
-            if only_mapped:
-                story.append(Paragraph(
-                    "<i>ℹ️ Only mapped dropdowns were processed (unmapped dropdowns were skipped)</i>",
-                    ParagraphStyle(
-                        name='RefreshModeNote',
-                        parent=self.styles['Normal'],
-                        fontSize=7,
-                        textColor=colors.HexColor('#2b6cb0'),
-                        spaceAfter=4
-                    )
-                ))
-            
-            # Compare deleted vs inserted for each portal
-            validation_table_data = [['Portal', 'Refreshed Count', 'Deleted', 'Inserted', 'Status']]
-            mismatches_found = False
-            
-            all_portals = set(deletion_details.keys()) | set(inserted_dropdowns.keys())
-            
-            for company in sorted(all_portals):
-                deleted_names = set(deletion_details.get(company, {}).get('dropdown_names', []))
-                inserted_names = set(inserted_dropdowns.get(company, []))
-                
-                deleted_count = len(deleted_names)
-                inserted_count = len(inserted_names)
-                
-                # Refreshed count = successfully replaced dropdowns (intersection)
-                refreshed_count = len(deleted_names & inserted_names)
-                
-                # Check if they match
-                if deleted_names == inserted_names:
-                    status = "✅ Match"
-                else:
-                    status = "⚠️ Mismatch"
-                    mismatches_found = True
-                
-                validation_table_data.append([
-                    company,
-                    str(refreshed_count),
-                    str(deleted_count),
-                    str(inserted_count),
-                    status
-                ])
-            
-            story.append(self._create_validation_table(validation_table_data, all_portals, deletion_details, inserted_dropdowns))
-            story.append(Spacer(1, 4))
-            
-            # If mismatches found, show detailed analysis
-            if mismatches_found:
-                story.append(Paragraph(
-                    "<b>⚠️ MISMATCH DETAILS:</b>",
-                    ParagraphStyle(
-                        name='MismatchHeader',
-                        parent=self.styles['Normal'],
-                        fontSize=9,
-                        textColor=colors.HexColor('#c53030'),
-                        spaceBefore=4,
-                        spaceAfter=4
-                    )
-                ))
-                
-                for company in sorted(all_portals):
-                    deleted_names = set(deletion_details.get(company, {}).get('dropdown_names', []))
-                    inserted_names = set(inserted_dropdowns.get(company, []))
-                    
-                    if deleted_names != inserted_names:
-                        # Find differences
-                        only_deleted = deleted_names - inserted_names
-                        only_inserted = inserted_names - deleted_names
-                        
-                        story.append(Paragraph(
-                            f"<b>{company}:</b>",
-                            ParagraphStyle(
-                                name='MismatchCompany',
-                                parent=self.styles['Normal'],
-                                fontSize=8,
-                                textColor=colors.HexColor('#2d3748'),
-                                spaceBefore=3
-                            )
-                        ))
-                        
-                        if only_deleted:
-                            story.append(Paragraph(
-                                f"   ❌ Deleted but NOT inserted ({len(only_deleted)}): {', '.join(sorted(only_deleted))}",
-                                ParagraphStyle(
-                                    name='OnlyDeleted',
-                                    parent=self.styles['Normal'],
-                                    fontSize=7,
-                                    textColor=colors.HexColor('#c53030'),
-                                    leftIndent=15
-                                )
-                            ))
-                        
-                        if only_inserted:
-                            story.append(Paragraph(
-                                f"   ➕ Inserted but NOT deleted ({len(only_inserted)}): {', '.join(sorted(only_inserted))}",
-                                ParagraphStyle(
-                                    name='OnlyInserted',
-                                    parent=self.styles['Normal'],
-                                    fontSize=7,
-                                    textColor=colors.HexColor('#d69e2e'),
-                                    leftIndent=15
-                                )
-                            ))
-                        
-                        story.append(Spacer(1, 2))
-                
-                story.append(Spacer(1, 6))
-            else:
-                story.append(Paragraph(
-                    "✅ All portals: Deleted and inserted dropdowns match perfectly!",
-                    ParagraphStyle(
-                        name='AllMatch',
-                        parent=self.styles['Normal'],
-                        fontSize=9,
-                        textColor=colors.HexColor('#276749'),
-                        spaceBefore=3,
-                        spaceAfter=6
-                    )
-                ))
-            
-            # Show complete dropdown lists for reference
-            story.append(Spacer(1, 10))
-            
+        # === DATABASE OPERATIONS SUMMARY ===
+        story.append(self._create_section_header("📊 Database Operations Summary"))
+        
+        # Get data from change_report if available
+        old_backups_removed = 0
+        backup_records_created = 0
+        staging_cleared = 0
+        audit_records_logged = 0
+        
+        if change_report:
+            old_backups_removed = getattr(change_report, 'old_backups_removed', 0)
+            backup_records_created = getattr(change_report, 'backup_count', 0)
+            staging_cleared = getattr(change_report, 'staging_cleared', 0)
+            audit_records_logged = getattr(change_report, 'audit_records_logged', 0)
+        
+        total_changes = 0
+        if change_report:
+            total_changes = len(change_report.new_records) + len(change_report.modified_records) + len(change_report.deleted_records)
+        
+        # Get backup file info from change_report
+        full_backup_file = None
+        if change_report:
+            full_backup_file = getattr(change_report, 'full_backup_file', None)
+        
+        # Create sentence-based summary style
+        sentence_style = ParagraphStyle(
+            name='SentenceText',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            leading=12,
+            textColor=colors.HexColor('#333333'),
+            leftIndent=10,
+            spaceAfter=4
+        )
+        
+        # Section header style
+        subheader_style = ParagraphStyle(
+            name='SubheaderStyle',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            fontName='Helvetica-Bold',
+            textColor=colors.HexColor('#2b6cb0'),
+            spaceBefore=6,
+            spaceAfter=3,
+            leftIndent=5
+        )
+        
+        # === BACKUP INFORMATION ===
+        story.append(Paragraph("💾 Backup Information:", subheader_style))
+        
+        if full_backup_file:
+            # Extract just the filename from the path
+            backup_filename = os.path.basename(full_backup_file)
             story.append(Paragraph(
-                "<b>📋 Complete Dropdown Lists by Portal</b>",
-                ParagraphStyle(
-                    name='DropdownListHeader',
-                    parent=self.styles['Normal'],
-                    fontSize=10,
-                    textColor=colors.HexColor('#2d3748'),
-                    spaceBefore=4,
-                    spaceAfter=6
-                )
-            ))
-            
-            for company in sorted(all_portals):
-                dropdown_names = sorted(inserted_dropdowns.get(company, []))
-                names_text = ', '.join(dropdown_names) if dropdown_names else 'None'
-                story.append(Paragraph(
-                    f"<b>{company}:</b> {names_text}",
-                    ParagraphStyle(
-                        name='DropdownListDetails',
-                        parent=self.styles['Normal'],
-                        fontSize=8,
-                        alignment=TA_LEFT,
-                        textColor=colors.HexColor('#4a5568'),
-                        spaceAfter=3
-                    )
-                ))
-            
-            story.append(Spacer(1, 8))
-
+                f"A full backup was created as <b>{backup_filename}</b> containing <b>{backup_records_created:,}</b> records "
+                f"before applying any changes.", sentence_style))
+        else:
+            story.append(Paragraph(
+                f"<b>{backup_records_created:,}</b> records were backed up to the backup table before applying changes.", 
+                sentence_style))
+        
+        if old_backups_removed > 0:
+            story.append(Paragraph(
+                f"<b>{old_backups_removed:,}</b> old backup records (older than 7 days) were automatically cleaned up.", 
+                sentence_style))
+        
+        story.append(Spacer(1, 4))
+        
+        # === STAGING OPERATIONS ===
+        story.append(Paragraph("📥 Staging Operations:", subheader_style))
+        
+        story.append(Paragraph(
+            f"The staging table was cleared of <b>{staging_cleared:,}</b> records from the previous run, "
+            f"and <b>{db_rows_inserted:,}</b> new records were uploaded for comparison.", 
+            sentence_style))
+        
+        story.append(Spacer(1, 4))
+        
+        # === COMPARISON & SYNC ===
+        story.append(Paragraph("🔄 Comparison & Sync:", subheader_style))
+        
+        if total_changes > 0:
+            story.append(Paragraph(
+                f"Comparing staging data with the original table detected <b>{total_changes:,}</b> changes. "
+                f"All changes have been applied successfully.", 
+                sentence_style))
+        else:
+            story.append(Paragraph(
+                "Comparison found no differences - the original table is already up to date.", 
+                sentence_style))
+        
+        story.append(Spacer(1, 4))
+        
+        # === AUDIT TRAIL ===
+        story.append(Paragraph("📝 Audit Trail:", subheader_style))
+        
+        if audit_records_logged > 0:
+            story.append(Paragraph(
+                f"<b>{audit_records_logged:,}</b> change records have been logged to the audit table for permanent history tracking.", 
+                sentence_style))
+        else:
+            story.append(Paragraph(
+                "No changes were made, so no audit records were logged.", 
+                sentence_style))
+        
+        story.append(Spacer(1, 8))
+        
         # === DROPDOWN MAPPING DETAILS BY PORTAL ===
         if mapping_details and mapping_details.get('applied_mappings') and db_upload_success:
             story.append(self._create_section_header("🔄 Dropdown Mapping Details by Portal"))
@@ -685,20 +916,74 @@ class ExtractionReportGenerator:
                         )
                     ))
 
-        # === FOOTER ===
-        story.append(Spacer(1, 12))
-        story.append(Paragraph(
-            "─" * 80,
-            self.styles['InfoText']
+        # === DROPDOWN NAMES INSERTED TO STAGING ===
+        if mapping_details and mapping_details.get('inserted_dropdown_names') and db_upload_success:
+            story.append(self._create_section_header("📝 Dropdown Names Inserted to Staging"))
+            
+            story.append(Paragraph(
+                "<i>Complete list of dropdown field names uploaded to staging table for each portal</i>",
+                ParagraphStyle(
+                    name='InsertedDropdownsNote',
+                    parent=self.styles['Normal'],
+                    fontSize=7,
+                    textColor=colors.HexColor('#4a5568'),
+                    spaceAfter=6,
+                    leftIndent=10
+                )
+            ))
+            
+            inserted_dropdowns = mapping_details.get('inserted_dropdown_names', {})
+            
+            for company in sorted(inserted_dropdowns.keys()):
+                dropdown_list = inserted_dropdowns[company]
+                if dropdown_list:
+                    # Company header with count
+                    story.append(Paragraph(
+                        f"<b>▶ {company}</b> - <font color='#2b6cb0'>{len(dropdown_list)} dropdown types</font>",
+                        ParagraphStyle(
+                            name='InsertedCompanyHeader',
+                            parent=self.styles['Normal'],
+                            fontSize=9,
+                            textColor=colors.HexColor('#1a365d'),
+                            backColor=colors.HexColor('#ebf8ff'),
+                            spaceBefore=6,
+                            spaceAfter=3,
+                            leftIndent=5,
+                            borderPadding=3
+                        )
+                    ))
+                    
+                    # All dropdown names in comma-separated format
+                    dropdown_text = ', '.join(f'"{d}"' for d in dropdown_list)
+                    story.append(Paragraph(
+                        dropdown_text,
+                        ParagraphStyle(
+                            name='DropdownList',
+                            parent=self.styles['Normal'],
+                            fontSize=7,
+                            textColor=colors.HexColor('#2d3748'),
+                            leftIndent=15,
+                            spaceAfter=4
+                        )
+                    ))
+
+        # === PROFESSIONAL FOOTER ===
+        story.append(Spacer(1, 20))
+        story.append(HRFlowable(
+            width="100%",
+            thickness=1,
+            color=self.colors['border'],
+            spaceBefore=0,
+            spaceAfter=8
         ))
         story.append(Paragraph(
-            f"Report generated by Extraction Bot v2.0 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Extraction Bot v2.0  |  Report Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  |  Algospring AI",
             ParagraphStyle(
                 name='Footer',
                 parent=self.styles['Normal'],
-                fontSize=7,
+                fontSize=8,
                 alignment=TA_CENTER,
-                textColor=colors.HexColor('#718096')
+                textColor=self.colors['text_muted']
             )
         ))
         
@@ -725,38 +1010,40 @@ class ExtractionReportGenerator:
         table = Table(data, colWidths=[180, 290])
         
         style = [
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#edf2f7')),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#2d3748')),
+            ('BACKGROUND', (0, 0), (0, -1), self.colors['light_bg']),
+            ('TEXTCOLOR', (0, 0), (0, -1), self.colors['secondary']),
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('PADDING', (0, 0), (-1, -1), 6),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Top alignment for wrapped text
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('PADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, self.colors['border']),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('WORDWRAP', (0, 0), (-1, -1), True),
+            ('ROUNDEDCORNERS', [3, 3, 3, 3]),
         ]
         
         # Highlight separator rows (empty label rows)
         for i, row in enumerate(data):
             if row[0] == '':
-                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#cbd5e0')))
-                style.append(('LINEABOVE', (0, i), (-1, i), 1.5, colors.HexColor('#a0aec0')))
+                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#E2E8F0')))
+                style.append(('LINEABOVE', (0, i), (-1, i), 1.5, self.colors['border']))
         
         # Highlight success count (row 7 = "Successful")
         if success_count > 0:
-            style.append(('BACKGROUND', (1, 7), (1, 7), colors.HexColor('#c6f6d5')))
-            style.append(('TEXTCOLOR', (1, 7), (1, 7), colors.HexColor('#276749')))
+            style.append(('BACKGROUND', (1, 7), (1, 7), colors.HexColor('#D1FAE5')))
+            style.append(('TEXTCOLOR', (1, 7), (1, 7), self.colors['success']))
             style.append(('FONTNAME', (1, 7), (1, 7), 'Helvetica-Bold'))
         
         # Highlight failure count if > 0 (row 8 = "Failed")
         if failure_count > 0:
-            style.append(('BACKGROUND', (1, 8), (1, 8), colors.HexColor('#fed7d7')))
-            style.append(('TEXTCOLOR', (1, 8), (1, 8), colors.HexColor('#c53030')))
+            style.append(('BACKGROUND', (1, 8), (1, 8), colors.HexColor('#FEE2E2')))
+            style.append(('TEXTCOLOR', (1, 8), (1, 8), self.colors['danger']))
             style.append(('FONTNAME', (1, 8), (1, 8), 'Helvetica-Bold'))
         
-        # Highlight total execution time (last row)
-        style.append(('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e6fffa')))
-        style.append(('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#234e52')))
+        # Highlight total execution time (last row) - Professional blue accent
+        style.append(('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')))
+        style.append(('TEXTCOLOR', (0, -1), (-1, -1), self.colors['primary']))
         style.append(('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'))
-        style.append(('FONTSIZE', (0, -1), (-1, -1), 9))
+        style.append(('FONTSIZE', (0, -1), (-1, -1), 10))
         
         table.setStyle(TableStyle(style))
         return table
@@ -766,13 +1053,14 @@ class ExtractionReportGenerator:
         table = Table(data, colWidths=[100, 370])
         
         style = [
-            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#edf2f7')),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#2d3748')),
+            ('BACKGROUND', (0, 0), (0, -1), self.colors['light_bg']),
+            ('TEXTCOLOR', (0, 0), (0, -1), self.colors['secondary']),
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, -1), 8),
             ('PADDING', (0, 0), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('WORDWRAP', (0, 0), (-1, -1), True),  # Enable word wrapping
         ]
         
         # Add success highlighting (green background)
@@ -799,15 +1087,16 @@ class ExtractionReportGenerator:
             data: Table data where error column may contain Paragraph objects for text wrapping
             status_colors: List of status indicators ('success', 'failed', 'retry')
         """
-        # Adjusted column widths - Status column wider to fit "SUCCESS (RETRY)"
-        table = Table(data, colWidths=[65, 80, 35, 45, 45, 45, 155])
+        # Adjusted column widths - wider Portal column to prevent overflow
+        # Portal (100) | Status (70) | Attempts (48) | Duration (48) | Start (40) | End (40) | Error (128)
+        table = Table(data, colWidths=[100, 70, 48, 48, 40, 40, 128])
 
         style = [
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2d3748')),
+            # Header row - Professional dark blue
+            ('BACKGROUND', (0, 0), (-1, 0), self.colors['primary']),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
 
             # Data rows
@@ -815,8 +1104,9 @@ class ExtractionReportGenerator:
             ('ALIGN', (0, 1), (5, -1), 'CENTER'),  # Portal to End columns centered
             ('ALIGN', (6, 1), (6, -1), 'LEFT'),  # Error column left-aligned
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Top alignment for better wrapping
-            ('PADDING', (0, 0), (-1, -1), 4),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, self.colors['border']),
+            ('WORDWRAP', (0, 0), (-1, -1), True),  # Enable word wrapping
         ]
 
         # Color-code status column based on success/failure/retry
@@ -825,17 +1115,17 @@ class ExtractionReportGenerator:
                 row_idx = i + 1  # Skip header row
                 if status_type == 'success':
                     # Green for success on first attempt
-                    style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#c6f6d5')))
-                    style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor('#276749')))
+                    style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#D1FAE5')))
+                    style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), self.colors['success']))
                     style.append(('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold'))
                 elif status_type == 'retry':
                     # Yellow/orange for success after retry
-                    style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#fef3c7')))
-                    style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor('#92400e')))
+                    style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#FEF3C7')))
+                    style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), self.colors['warning']))
                     style.append(('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold'))
                 elif status_type == 'failed':
                     # Red for failure
-                    style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#fed7d7')))
+                    style.append(('BACKGROUND', (1, row_idx), (1, row_idx), colors.HexColor('#FEE2E2')))
                     style.append(('TEXTCOLOR', (1, row_idx), (1, row_idx), colors.HexColor('#c53030')))
                     style.append(('FONTNAME', (1, row_idx), (1, row_idx), 'Helvetica-Bold'))
 
@@ -856,99 +1146,101 @@ class ExtractionReportGenerator:
         dropdown-name lists can be rendered separately as wrapped paragraphs that
         may span pages safely.
         """
-        table = Table(data, colWidths=[220, 80])
+        table = Table(data, colWidths=[340, 130])
 
         style = [
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#744210')),
+            # Header row - Amber/Orange for deletion context
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#B45309')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
 
             # Data rows
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
             ('ALIGN', (0, 1), (0, -1), 'LEFT'),
             ('ALIGN', (1, 1), (1, -1), 'CENTER'),
             ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
 
             # Borders and padding
-            ('PADDING', (0, 0), (-1, -1), 6),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, self.colors['border']),
+            ('WORDWRAP', (0, 0), (-1, -1), True),
         ]
 
         # Alternate row colors
         for i in range(1, len(data)):
             if i % 2 == 0:
-                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fffaf0')))
+                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#FEF3C7')))
 
         table.setStyle(TableStyle(style))
         return table
     
-    def _create_validation_table(self, data: List[List[str]], all_portals, deletion_details, inserted_dropdowns) -> Table:
-        """Create a validation table comparing deleted vs inserted dropdowns.
+    def _create_staging_comparison_table(self, data: List[List[str]]) -> Table:
+        """Create a staging comparison table showing new/modified/deleted changes.
         
         Args:
-            data: Table data [['Portal', 'Refreshed Count', 'Deleted', 'Inserted', 'Status'], ...]
-            all_portals: Set of all portal names
-            deletion_details: Dict of deletion details
-            inserted_dropdowns: Dict of inserted dropdown names
+            data: Table data [['Portal', 'New Values', 'Modified', 'Deleted', 'Unchanged', 'Total Changes'], ...]
+                  Last row is totals row starting with '📊 TOTAL'
         
         Returns:
-            Table: Styled validation table with color-coded status
+            Table: Styled staging comparison table with color-coded totals
         """
-        table = Table(data, colWidths=[170, 85, 70, 70, 75])
+        # Column widths: [Portal, New, Modified, Deleted, Unchanged, Total]
+        table = Table(data, colWidths=[130, 62, 62, 62, 75, 79])
         
         style = [
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2b6cb0')),
+            # Header row - Professional blue
+            ('BACKGROUND', (0, 0), (-1, 0), self.colors['primary']),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('WORDWRAP', (0, 0), (-1, -1), True),
             
             # Data rows
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
             ('ALIGN', (0, 1), (0, -1), 'LEFT'),
             ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
             
             # Borders and padding
-            ('PADDING', (0, 0), (-1, -1), 5),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, self.colors['border']),
         ]
         
-        # Color-code status column based on match/mismatch
-        for i, company in enumerate(sorted(all_portals), start=1):
-            deleted_names = set(deletion_details.get(company, {}).get('dropdown_names', []))
-            inserted_names = set(inserted_dropdowns.get(company, []))
+        # Totals row styling (last row)
+        totals_row_idx = len(data) - 1
+        style.extend([
+            ('BACKGROUND', (0, totals_row_idx), (-1, totals_row_idx), colors.HexColor('#edf2f7')),
+            ('TEXTCOLOR', (0, totals_row_idx), (-1, totals_row_idx), colors.HexColor('#2d3748')),
+            ('FONTNAME', (0, totals_row_idx), (-1, totals_row_idx), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, totals_row_idx), (-1, totals_row_idx), 9),
+        ])
+        
+        # Alternate row colors for data rows (excluding header and totals)
+        for i in range(1, totals_row_idx):
+            if i % 2 == 0:
+                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#f7fafc')))
+        
+        # Highlight change columns if they have values > 0
+        for i in range(1, totals_row_idx):
+            row_data = data[i]
             
-            if deleted_names == inserted_names:
-                # Green for match
-                style.append(('BACKGROUND', (4, i), (4, i), colors.HexColor('#c6f6d5')))
-                style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#276749')))
-                style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
-                
-                # Highlight refreshed count in green too
+            # New values column (index 1) - green if > 0
+            if row_data[1] != '0' and row_data[1] != '-':
                 style.append(('TEXTCOLOR', (1, i), (1, i), colors.HexColor('#276749')))
                 style.append(('FONTNAME', (1, i), (1, i), 'Helvetica-Bold'))
-            else:
-                # Red/Orange for mismatch
-                style.append(('BACKGROUND', (4, i), (4, i), colors.HexColor('#fed7d7')))
-                style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#c53030')))
-                style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
-                
-                # Also highlight the count columns if they differ
-                deleted_count = len(deleted_names)
-                inserted_count = len(inserted_names)
-                if deleted_count != inserted_count:
-                    style.append(('TEXTCOLOR', (2, i), (3, i), colors.HexColor('#c53030')))
-                    style.append(('FONTNAME', (2, i), (3, i), 'Helvetica-Bold'))
-        
-        # Alternate row colors for portal name column
-        for i in range(1, len(data)):
-            if i % 2 == 0:
-                style.append(('BACKGROUND', (0, i), (0, i), colors.HexColor('#f7fafc')))
+            
+            # Modified column (index 2) - blue if > 0
+            if row_data[2] != '0' and row_data[2] != '-':
+                style.append(('TEXTCOLOR', (2, i), (2, i), colors.HexColor('#2c5282')))
+                style.append(('FONTNAME', (2, i), (2, i), 'Helvetica-Bold'))
+            
+            # Deleted column (index 3) - orange if > 0
+            if row_data[3] != '0' and row_data[3] != '-':
+                style.append(('TEXTCOLOR', (3, i), (3, i), colors.HexColor('#c05621')))
+                style.append(('FONTNAME', (3, i), (3, i), 'Helvetica-Bold'))
         
         table.setStyle(TableStyle(style))
         return table
@@ -962,55 +1254,57 @@ class ExtractionReportGenerator:
         Returns:
             Table: Styled ReportLab table
         """
-        table = Table(data, colWidths=[250, 200])
+        table = Table(data, colWidths=[260, 210])
         
         style = [
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2b6cb0')),
+            # Header row - Professional blue
+            ('BACKGROUND', (0, 0), (-1, 0), self.colors['primary']),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('WORDWRAP', (0, 0), (-1, -1), True),
             
             # Data rows
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
             ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 1), (-1, -1), 'TOP'),
             
             # Borders and padding
-            ('PADDING', (0, 0), (-1, -1), 4),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, self.colors['border']),
         ]
         
         # Alternate row colors
         for i in range(1, len(data)):
             if i % 2 == 0:
-                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#ebf8ff')))
+                style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#DBEAFE')))
         
         table.setStyle(TableStyle(style))
         return table
     
     def _create_summary_table(self, data: List[List[str]]) -> Table:
         """Create a styled summary table."""
-        table = Table(data, colWidths=[180, 100, 80])
+        table = Table(data, colWidths=[260, 105, 105])
         
         style = [
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a365d')),
+            # Header row - Professional dark blue
+            ('BACKGROUND', (0, 0), (-1, 0), self.colors['primary_dark']),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('WORDWRAP', (0, 0), (-1, -1), True),
             
-            # Total row (last row)
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#edf2f7')),
+            # Total row (last row) - Light blue accent
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DBEAFE')),
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
             
             # Data rows
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
             ('ALIGN', (1, 1), (-1, -1), 'CENTER'),
-            ('PADDING', (0, 0), (-1, -1), 6),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+            ('PADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, self.colors['border']),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]
         
@@ -1041,10 +1335,14 @@ def generate_extraction_report(
     output_folder: str,
     portals_processed: List[str],
     deletion_details: Dict = None,
-    mapping_details: Dict = None
+    mapping_details: Dict = None,
+    change_report = None
 ) -> str:
     """
     Convenience function to generate extraction report.
+    
+    Args:
+        change_report: ChangeReport object with comparison results (new/modified/deleted records)
     
     Returns:
         str: Path to generated PDF report
@@ -1065,5 +1363,6 @@ def generate_extraction_report(
         output_folder=output_folder,
         portals_processed=portals_processed,
         deletion_details=deletion_details,
-        mapping_details=mapping_details
+        mapping_details=mapping_details,
+        change_report=change_report
     )

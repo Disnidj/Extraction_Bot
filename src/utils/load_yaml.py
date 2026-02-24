@@ -211,3 +211,11 @@ MAX_RETRIES = config['retry']['max_attempts']
  
 MAX_REFERRAL_MINUTES = config['referrals']['max_minutes']
 IS_REFERRAL_ACTIVE = config['referrals']['active']
+
+# *** EXTRACTION NOTIFICATIONS configuration ***
+EXTRACTION_NOTIFICATIONS_ENABLED = config.get('extraction_notifications', {}).get('enabled', False)
+OUTLOOK_CLIENT_ID = config.get('extraction_notifications', {}).get('outlook', {}).get('client_id', '')
+OUTLOOK_TENANT_ID = config.get('extraction_notifications', {}).get('outlook', {}).get('tenant_id', '')
+OUTLOOK_TOKEN_CACHE_PATH = config.get('extraction_notifications', {}).get('outlook', {}).get('token_cache_path', 'config/outlook_token_cache.json')
+NOTIFICATION_RECIPIENTS_TO = config.get('extraction_notifications', {}).get('recipients', {}).get('to_recipients', [])
+NOTIFICATION_RECIPIENTS_CC = config.get('extraction_notifications', {}).get('recipients', {}).get('cc_recipients', [])

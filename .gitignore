@@ -105,3 +105,6 @@ dmypy.json
 extracted_data/*
 db_update/*
 reports/*
+database/backups/*
+
+config/outlook_token_cache.json

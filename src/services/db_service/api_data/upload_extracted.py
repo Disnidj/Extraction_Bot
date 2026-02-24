@@ -2,18 +2,29 @@
 Upload Extracted Portal Data to Database
 Handles batch upload with transaction support using staged comparison.
 
-Features:
-- Staged upload: Compares new data with existing before applying changes
-- Backup: Creates backup of current data before changes (7-day retention)
-- Audit trail: Logs all INSERT/UPDATE/DELETE operations
-- Change detection: Only modified records are updated (unchanged data untouched)
-- Whitespace detection: Detects subtle whitespace and case differences
+COMPLETE FLOW:
+═══════════════════════════════════════════════════════════════════════════
+1. EXTRACT & PARSE: Read extracted .txt files from portal extractions
+2. MAP DROPDOWN NAMES: Convert portal-specific names → standard names (BEFORE staging)
+   - Uses Medical_CTN_Portal_Field_Mapping table
+   - Example: "Quotation For" → "Quotation_For", "Policy_Holder_Type" → "Quotation_For"
+3. FILTER & VALIDATE: Remove unwanted dropdowns (SKIP_DROPDOWN_NAMES)
+4. INSERT TO STAGING: Upload prepared data to Medical_CTN_Cascading_Dropdown_Staging
+5. BACKUP ORIGINAL: Snapshot affected rows from Medical_CTN_Cascading_Dropdown_Lifecare
+6. COMPARE: Staging ↔ Original (exact match detection)
+7. APPLY CHANGES: Only INSERT/UPDATE/DELETE what changed
+8. AUDIT TRAIL: Log all changes to Medical_CTN_Cascading_Dropdown_Audit
+═══════════════════════════════════════════════════════════════════════════
 
-Includes dropdown name mapping from Medical_CTN_Portal_Field_Mapping table:
-- Looks up portal-specific dropdown names (e.g., "Quotation For" from MaxHealth column)
-- Maps to standard dropdown names (e.g., "Quotation_For" from Dropdown_Name column)
+KEY FEATURES:
+- ✅ Mapping happens BEFORE staging upload (data already standardized)
+- ✅ Only changed records are modified (unchanged data untouched)
+- ✅ Detects whitespace and case differences
+- ✅ Selective backup (only affected rows, 7-day retention)
+- ✅ Full audit trail (permanent change history)
+- ✅ Transaction safety (rollback on error)
 
-Note: TPA/Network expansion is done in the formatters when writing the txt file.
+NOTE: TPA/Network expansion is done in formatters when writing the txt file.
 """
 
 import json
@@ -84,23 +95,35 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str, dict, dict, Opt
     """
     Upload all extracted data to database using staged comparison.
     
-    Process:
-    1. Collect all extracted files
-    2. Parse all records  
-    3. Load dropdown name mappings for each company
-    4. Apply mappings to convert portal names to standard names
-    5. Upload to staging table
-    6. Compare staging vs original (exact match including whitespace)
-    7. Create backup of affected data (kept for 7 days)
-    8. Apply only the changes (INSERT/UPDATE/DELETE)
-    9. Log changes to audit table
-    10. Cleanup staging and old backups
+    IMPORTANT: Dropdown name mapping happens in THIS function BEFORE staging upload.
+    Data is inserted to staging table with ALREADY-MAPPED dropdown names.
+    
+    Detailed Process:
+    ─────────────────────────────────────────────────────────────────────────
+    PHASE 1: DATA PREPARATION (This Function)
+        1. Collect all extracted .txt files
+        2. Parse JSON records from files
+        3. Standardize company names
+        4. Load dropdown mappings from Medical_CTN_Portal_Field_Mapping
+        5. Apply mappings: portal-specific names → standard names
+        6. Filter unwanted dropdowns (SKIP_DROPDOWN_NAMES)
+        7. Pass PREPARED DATA to staged_upload_to_database()
+        
+    PHASE 2: STAGED UPLOAD (staging_upload.py)
+        8. Insert prepared data to STAGING table
+        9. Backup affected rows from ORIGINAL table
+        10. Compare STAGING ↔ ORIGINAL (direct comparison, no mapping needed)
+        11. Detect changes (NEW/MODIFIED/DELETED)
+        12. Apply only the changes to ORIGINAL table
+        13. Log changes to AUDIT table
+    ─────────────────────────────────────────────────────────────────────────
     
     Args:
         output_dir: Base output directory containing portal subdirectories
         
     Returns:
-        Tuple of (success: bool, rows_changed: int, message: str, deletion_details: dict, mapping_details: dict, change_report: ChangeReport)
+        Tuple of (success: bool, rows_changed: int, message: str, 
+                  deletion_details: dict, mapping_details: dict, change_report: ChangeReport)
     """
     upload_start_time = time.time()
     
@@ -332,9 +355,26 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str, dict, dict, Opt
             db.disconnect()
 
 
+# =============================================================================
+# LEGACY FUNCTION - DEPRECATED (Kept for manual testing only)
+# =============================================================================
+# WARNING: This function uses OLD upload logic (DELETE + INSERT)
+# WITHOUT staging, backup, comparison, or audit trail.
+# 
+# For production use, always use upload_to_database() instead.
+# This function is kept only for manual command-line testing.
+# =============================================================================
+
 def upload_single_file(file_path: str) -> Tuple[bool, int, str]:
     """
-    Upload a single extracted file to database with dropdown mapping.
+    [DEPRECATED] Upload a single extracted file to database with dropdown mapping.
+    
+    ⚠️ WARNING: This is LEGACY CODE using DELETE + INSERT approach!
+    ⚠️ Does NOT use staging, backup, comparison, or audit trail.
+    ⚠️ Use upload_to_database() for production instead.
+    
+    This function is kept only for manual testing via command line:
+        python -m src.services.db_service.api_data.upload_extracted <file_path>
     
     Args:
         file_path: Path to the extracted .txt file

@@ -10,6 +10,25 @@ email:
   app_secret: "d1V8Q~ZpVENL~Ms9uDLa.3ryTofrGtP54kBa3aSW"
   subject: "Medical Insurance Documents"
 
+# Email notifications for extraction reports
+extraction_notifications:
+  enabled: true  # Set to false to disable email notifications
+  outlook:
+    # Use credentials from demo folder - update these with your organization's Azure AD app
+    client_id: "1ac522e4-707b-4dc8-b7c7-ba88bc4d0e6f"
+    tenant_id: "a3dfb5e4-789f-427f-ada4-9481ec87a98e"
+    token_cache_path: "config/outlook_token_cache.json"
+  recipients:
+    # TO recipients (primary recipients)
+    to_recipients:
+      - "mandinu.m@thealtria.com"
+      
+
+    # CC recipients (carbon copy)
+    cc_recipients:
+      - "wamandinumaneth@gmail.com"
+      # - "disnij@algospring.com"
+
 paths:
   extracted_data_dir: "extracted_data/extracted_data.txt"
   attachments_save_dir: "attachments"

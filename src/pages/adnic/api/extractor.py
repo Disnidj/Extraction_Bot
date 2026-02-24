@@ -6,7 +6,7 @@ Uses ADNICApiClient to make API calls and collects all possible values.
 """
 
 import asyncio
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from patchright.async_api import Page
 from src.utils.logger import adnic_logger
 from .client import ADNICApiClient, DropdownOption
@@ -388,3 +388,49 @@ class ADNICApiExtractor:
             **self.stats,
             **self.client.get_stats()
         }
+    
+    def validate_extraction(self) -> Tuple[bool, List[str]]:
+        """
+        Validate that extraction completed successfully with expected data.
+        
+        Checks for API errors like:
+        - TPAs found but no Networks returned (API rate limit or error)
+        - Expected cascading data missing
+        
+        Returns:
+            Tuple of (is_valid, list of error messages)
+        """
+        errors = []
+        
+        # Check 1: If we have TPAs but no networks, this is an API error
+        # Networks are critical for ADNIC as all dropdowns depend on TPA+Network
+        if self.stats["tpa_count"] > 0 and self.stats["network_count"] == 0:
+            errors.append(
+                f"API Error: Found {self.stats['tpa_count']} TPAs but GetNetworkTPA returned 0 networks for all TPAs. "
+                f"This may indicate API rate limiting, session issues, or ADNIC portal changes."
+            )
+        
+        # Check 2: If we have networks but no TCovers (territorial covers)
+        if self.stats["network_count"] > 0 and self.stats["tcover_count"] == 0:
+            errors.append(
+                f"API Warning: Found {self.stats['network_count']} networks but no territorial covers were extracted."
+            )
+        
+        # Check 3: Minimum records threshold
+        # ADNIC should have at least 100+ records with full TPA/Network combinations
+        MIN_EXPECTED_RECORDS = 100
+        if self.stats["records_count"] < MIN_EXPECTED_RECORDS and self.stats["tpa_count"] > 0:
+            errors.append(
+                f"API Error: Only {self.stats['records_count']} records extracted, expected at least {MIN_EXPECTED_RECORDS}. "
+                f"Extraction may be incomplete due to API issues."
+            )
+        
+        is_valid = len(errors) == 0
+        
+        if not is_valid:
+            adnic_logger.error("❌ EXTRACTION VALIDATION FAILED:")
+            for error in errors:
+                adnic_logger.error(f"   • {error}")
+                print(f"\n❌ {error}")
+        
+        return is_valid, errors
