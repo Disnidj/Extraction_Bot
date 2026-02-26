@@ -63,6 +63,10 @@ COMPANY_TO_FUNCTION_MAPPING = {
 }
 
 
+# Reverse mapping: portal function name → proper company display name
+FUNCTION_TO_COMPANY_MAPPING = {v: k for k, v in COMPANY_TO_FUNCTION_MAPPING.items()}
+
+
 # Companies that have API extraction implemented
 API_ENABLED_COMPANIES = [
     "ADNIC",                    # #5
@@ -76,29 +80,33 @@ API_ENABLED_COMPANIES = [
 ]
 
 
-def get_filtered_company_mapping(mode='standard'):
+def get_filtered_company_mapping(mode='standard', available_api_companies=None):
     """
     Get company mapping filtered by extraction mode.
     
     Args:
         mode: 'standard' shows all companies, 'api' shows only API-enabled companies
+        available_api_companies: dynamic list of company names available for API mode.
+                                 If None, falls back to the hardcoded API_ENABLED_COMPANIES.
     
     Returns:
         Filtered COMPANY_MAPPING dict
     """
     if mode == 'api':
-        return {k: v for k, v in COMPANY_MAPPING.items() if v in API_ENABLED_COMPANIES}
+        filter_list = available_api_companies if available_api_companies is not None else API_ENABLED_COMPANIES
+        return {k: v for k, v in COMPANY_MAPPING.items() if v in filter_list}
     return COMPANY_MAPPING
 
 
-def show_company_menu(mode='standard'):
+def show_company_menu(mode='standard', available_api_companies=None):
     """
     Display the company selection menu.
     
     Args:
         mode: 'standard' or 'api' to filter available companies
+        available_api_companies: dynamic list of available company names for API mode
     """
-    filtered_mapping = get_filtered_company_mapping(mode)
+    filtered_mapping = get_filtered_company_mapping(mode, available_api_companies)
     
     # Renumber filtered companies sequentially starting from 1
     renumbered_mapping = {i: company for i, company in enumerate(filtered_mapping.values(), start=1)}
@@ -120,14 +128,15 @@ def show_company_menu(mode='standard'):
         print(f"\n💡 Showing {len(renumbered_mapping)} companies with API extraction available")
 
 
-def get_user_selection(mode='standard'):
+def get_user_selection(mode='standard', available_api_companies=None):
     """
     Get user selection for company processing from command line.
     
     Args:
         mode: 'standard' or 'api' to filter available companies
+        available_api_companies: dynamic list of available company names for API mode
     """
-    filtered_mapping = get_filtered_company_mapping(mode)
+    filtered_mapping = get_filtered_company_mapping(mode, available_api_companies)
     
     # Renumber filtered companies sequentially starting from 1
     renumbered_mapping = {i: company for i, company in enumerate(filtered_mapping.values(), start=1)}
@@ -258,13 +267,15 @@ def filter_portal_list(portal_list, selected_companies):
     return filtered
 
 
-def get_company_selection(mode='standard'):
+def get_company_selection(mode='standard', available_api_companies=None):
     """
     Main function - shows menu and returns selected companies.
     No database connection needed.
     
     Args:
         mode: 'standard' for all companies, 'api' for API-enabled only
+        available_api_companies: dynamic list of company names available for API mode.
+                                 Passed from main.py based on active API_PORTAL_GROUPS.
     
     Returns:
         List of selected company names
@@ -273,7 +284,7 @@ def get_company_selection(mode='standard'):
     previous = load_previous_selection()
     if previous:
         # Validate previous selection against current mode
-        filtered_mapping = get_filtered_company_mapping(mode)
+        filtered_mapping = get_filtered_company_mapping(mode, available_api_companies)
         valid_previous = [c for c in previous if c in filtered_mapping.values()]
         
         if valid_previous:
@@ -288,8 +299,8 @@ def get_company_selection(mode='standard'):
                 return valid_previous
     
     # Show menu and get new selection
-    show_company_menu(mode)
-    selected_companies = get_user_selection(mode)
+    show_company_menu(mode, available_api_companies)
+    selected_companies = get_user_selection(mode, available_api_companies)
     return selected_companies
 
 

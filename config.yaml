@@ -133,8 +133,8 @@ dubaiinsurance:
   quotation_download_dir: "company_data/dubaiinsurance/quotation_sheets"
 
 qatar:
-  email: "broker@lifecareinsurance.com"
-  password: "Lifecare@2025"
+  email: "quotes@lifecareinternational.com"
+  password: "Lifecare@2026"
   quotation_download_dir: "company_data/qatar/quotation_sheets"
 
 adnic:

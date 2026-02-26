@@ -87,13 +87,13 @@ PORTAL_GROUPS = {
 API_PORTAL_GROUPS = {
     "api_portals": [
         {"function": login_adnic_api, "name": "ADNIC"},
-        {"function": run_takaful_api_extraction, "name": "Takaful"},
+        # {"function": run_takaful_api_extraction, "name": "Takaful"},
         {"function": run_qatar_api_extraction, "name": "QATAR"},
         {"function": run_maxhealth_api_extraction, "name": "MaxHealth"},
         {"function": run_sukoon_api_extraction, "name": "Sukoon"},
         {"function": run_orient_aura_api_extraction, "name": "Orient Aura"},
         {"function": run_nlgi_aura_api_extraction, "name": "NLGI Aura"},
-        {"function": run_qic_healthx_api_extraction, "name": "QIC HealthX Exclusive"},
+        # {"function": run_qic_healthx_api_extraction, "name": "QIC HealthX Exclusive"},
     ]
 }
 
@@ -230,13 +230,14 @@ def get_extraction_mode():
             print("Invalid choice. Please enter 1 or 2.")
 
 
-async def run_api_extraction_mode(playwright, selected_companies):
+async def run_api_extraction_mode(playwright, selected_companies, skip_confirmation=False):
     """
     Run API-based extraction mode with timing tracking.
     
     Args:
         playwright: Playwright instance
         selected_companies: List of selected company names
+        skip_confirmation: If True, bypass the interactive confirmation prompt (used for scheduled runs)
     """
     # Filter to portals with API extraction available
     api_portals = API_PORTAL_GROUPS["api_portals"]
@@ -267,7 +268,13 @@ async def run_api_extraction_mode(playwright, selected_companies):
         print(f"   Available API portals: {', '.join(api_portal_names)}")
         return
     
-    print(f"\n✅ Will extract from: {', '.join([p['name'] for p in matching_portals])}")
+    # Build display name map: portal name → proper company name for logs/prints
+    from src.services.company_selector_updated import FUNCTION_TO_COMPANY_MAPPING
+    display_name_map = {p['name']: FUNCTION_TO_COMPANY_MAPPING.get(p['name'], p['name']) for p in matching_portals}
+    
+    print(f"\n✅ Will extract from:")
+    for p in matching_portals:
+        print(f"   • {display_name_map[p['name']]}")
     
     # Show retry configuration
     if MAX_RETRY_ATTEMPTS > 0:
@@ -277,10 +284,13 @@ async def run_api_extraction_mode(playwright, selected_companies):
         print(f"\n⚠️  Auto-retry disabled")
     
     # Confirm
-    confirm = input("\n▶️  Press Enter to start API extraction (or 'q' to quit): ").strip().lower()
-    if confirm == 'q':
-        print("👋 Cancelled.")
-        return
+    if skip_confirmation:
+        print("\n▶️  Scheduled run - skipping confirmation prompt, starting automatically...")
+    else:
+        confirm = input("\n▶️  Press Enter to start API extraction (or 'q' to quit): ").strip().lower()
+        if confirm == 'q':
+            print("👋 Cancelled.")
+            return
     
     # Record overall start time
     overall_start_time = datetime.now()
@@ -295,7 +305,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
     main_execution_logger.info(f"🚀 API EXTRACTION FLOW STARTED")
     main_execution_logger.info(f"Start Time: {overall_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     main_execution_logger.info(f"Output Folder: {run_output_dir}")
-    main_execution_logger.info(f"Portals to process: {', '.join([p['name'] for p in matching_portals])}")
+    main_execution_logger.info(f"Portals to process: {', '.join([display_name_map[p['name']] for p in matching_portals])}")
     main_execution_logger.info(f"Retry Configuration: {'Enabled' if MAX_RETRY_ATTEMPTS > 0 else 'Disabled'} (Max attempts: {MAX_RETRY_ATTEMPTS + 1}, Delay: {RETRY_DELAY_SECONDS}s)")
     main_execution_logger.info(f"{'='*70}")
     
@@ -304,8 +314,9 @@ async def run_api_extraction_mode(playwright, selected_companies):
     
     # Run extraction for each portal (FIRST ATTEMPT)
     for portal in matching_portals:
+        portal_display = display_name_map.get(portal['name'], portal['name'])
         print(f"\n{'=' * 60}")
-        print(f"🔄 Starting API extraction: {portal['name']}")
+        print(f"🔄 Starting API extraction: {portal_display}")
         print(f"{'=' * 60}")
         
         portal_start = datetime.now()
@@ -317,7 +328,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
             'retry_attempt': None
         }
         portal_results[portal['name']] = {'success': False, 'error': None, 'attempts': 1, 'retry_success': False}
-        main_execution_logger.info(f"🚀 Portal '{portal['name']}' - ATTEMPT 1 Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
+        main_execution_logger.info(f"🚀 Portal '{portal_display}' - ATTEMPT 1 Started at {portal_start.strftime('%Y-%m-%d %H:%M:%S')}")
         
         try:
             result = await portal["function"](playwright, output_dir=run_output_dir)
@@ -357,18 +368,18 @@ async def run_api_extraction_mode(playwright, selected_companies):
             portal_timings[portal['name']]['first_attempt']['duration'] = portal_duration
             
             if success:
-                print(f"\n✅ {portal['name']} extraction completed!")
+                print(f"\n✅ {portal_display} extraction completed!")
                 main_execution_logger.info(
-                    f"✅ Portal '{portal['name']}' - ATTEMPT 1 Completed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"✅ Portal '{portal_display}' - ATTEMPT 1 Completed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
                     f"Duration: {portal_duration.total_seconds():.2f}s ({int(portal_duration.total_seconds() // 60)}m {int(portal_duration.total_seconds() % 60)}s)"
                 )
             else:
                 error_msg = portal_results[portal['name']].get('error') or "Unknown extraction error"
                 portal_results[portal['name']]['error'] = error_msg
-                print(f"\n❌ {portal['name']} extraction failed on ATTEMPT 1!")
+                print(f"\n❌ {portal_display} extraction failed on ATTEMPT 1!")
                 print(f"   Error: {error_msg}")
                 main_execution_logger.error(
-                    f"❌ Portal '{portal['name']}' - ATTEMPT 1 Failed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                    f"❌ Portal '{portal_display}' - ATTEMPT 1 Failed at {portal_end.strftime('%Y-%m-%d %H:%M:%S')} | "
                     f"Duration: {portal_duration.total_seconds():.2f}s | Error: {error_msg}"
                 )
         except Exception as e:
@@ -383,9 +394,9 @@ async def run_api_extraction_mode(playwright, selected_companies):
             
             portal_results[portal['name']]['error'] = str(e)
             
-            print(f"\n❌ Error during {portal['name']} ATTEMPT 1: {e}")
+            print(f"\n❌ Error during {portal_display} ATTEMPT 1: {e}")
             main_execution_logger.error(
-                f"❌ Portal '{portal['name']}' - ATTEMPT 1 Error at {portal_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
+                f"❌ Portal '{portal_display}' - ATTEMPT 1 Error at {portal_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
                 f"Duration: {portal_duration.total_seconds():.2f}s"
             )
             # Log full traceback for debugging
@@ -466,7 +477,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
             main_execution_logger.info(f"\n{'='*70}")
             main_execution_logger.info(f"🔄 RETRY ATTEMPT FOR FAILED PORTALS")
             main_execution_logger.info(f"{'='*70}")
-            main_execution_logger.info(f"Failed portals: {', '.join([p['name'] for p in failed_portal_list])}")
+            main_execution_logger.info(f"Failed portals: {', '.join([display_name_map.get(p['name'], p['name']) for p in failed_portal_list])}")
             main_execution_logger.info(f"Retry delay: {RETRY_DELAY_SECONDS} seconds")
             
             # Wait before retry
@@ -475,8 +486,9 @@ async def run_api_extraction_mode(playwright, selected_companies):
             
             # Retry each failed portal
             for portal in failed_portal_list:
+                portal_display = display_name_map.get(portal['name'], portal['name'])
                 print(f"\n{'='*60}")
-                print(f"🔄 RETRY: {portal['name']} (Attempt 2/{MAX_RETRY_ATTEMPTS + 1})")
+                print(f"🔄 RETRY: {portal_display} (Attempt 2/{MAX_RETRY_ATTEMPTS + 1})")
                 print(f"{'='*60}")
                 
                 retry_start = datetime.now()
@@ -485,7 +497,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
                     'end': None,
                     'duration': None
                 }
-                main_execution_logger.info(f"\n🔄 Portal '{portal['name']}' - ATTEMPT 2 (Retry) Started at {retry_start.strftime('%Y-%m-%d %H:%M:%S')}")
+                main_execution_logger.info(f"\n🔄 Portal '{portal_display}' - ATTEMPT 2 (Retry) Started at {retry_start.strftime('%Y-%m-%d %H:%M:%S')}")
                 
                 try:
                     result = await portal["function"](playwright, output_dir=run_output_dir)
@@ -531,9 +543,9 @@ async def run_api_extraction_mode(playwright, selected_companies):
                         portal_timings[portal['name']]['end'] = retry_end
                         portal_timings[portal['name']]['duration'] = retry_duration
                         
-                        print(f"\n✅ {portal['name']} ATTEMPT 2 SUCCEEDED!")
+                        print(f"\n✅ {portal_display} ATTEMPT 2 SUCCEEDED!")
                         main_execution_logger.info(
-                            f"✅ Portal '{portal['name']}' - ATTEMPT 2 (Retry) SUCCEEDED at {retry_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                            f"✅ Portal '{portal_display}' - ATTEMPT 2 (Retry) SUCCEEDED at {retry_end.strftime('%Y-%m-%d %H:%M:%S')} | "
                             f"Duration: {retry_duration.total_seconds():.2f}s ({int(retry_duration.total_seconds() // 60)}m {int(retry_duration.total_seconds() % 60)}s) | "
                             f"Total attempts: 2"
                         )
@@ -541,10 +553,10 @@ async def run_api_extraction_mode(playwright, selected_companies):
                         # Still failed after retry
                         portal_results[portal['name']]['error'] = error_msg or portal_results[portal['name']].get('error', 'Unknown error')
                         
-                        print(f"\n❌ {portal['name']} ATTEMPT 2 FAILED - Both attempts failed")
+                        print(f"\n❌ {portal_display} ATTEMPT 2 FAILED - Both attempts failed")
                         print(f"   Error: {portal_results[portal['name']]['error']}")
                         main_execution_logger.error(
-                            f"❌ Portal '{portal['name']}' - ATTEMPT 2 (Retry) FAILED at {retry_end.strftime('%Y-%m-%d %H:%M:%S')} | "
+                            f"❌ Portal '{portal_display}' - ATTEMPT 2 (Retry) FAILED at {retry_end.strftime('%Y-%m-%d %H:%M:%S')} | "
                             f"Duration: {retry_duration.total_seconds():.2f}s | Error: {error_msg} | "
                             f"Total attempts: 2 (both failed)"
                         )
@@ -561,9 +573,9 @@ async def run_api_extraction_mode(playwright, selected_companies):
                     portal_results[portal['name']]['retry_success'] = False
                     portal_results[portal['name']]['error'] = str(e)
                     
-                    print(f"\n❌ Error during {portal['name']} ATTEMPT 2 (Retry): {e}")
+                    print(f"\n❌ Error during {portal_display} ATTEMPT 2 (Retry): {e}")
                     main_execution_logger.error(
-                        f"❌ Portal '{portal['name']}' - ATTEMPT 2 (Retry) Error at {retry_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
+                        f"❌ Portal '{portal_display}' - ATTEMPT 2 (Retry) Error at {retry_end.strftime('%Y-%m-%d %H:%M:%S')}: {e} | "
                         f"Duration: {retry_duration.total_seconds():.2f}s | Total attempts: 2"
                     )
                     import traceback
@@ -595,7 +607,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
             # List which portals succeeded on retry
             if retry_success_count > 0:
                 retry_success_portals = [
-                    p['name'] for p in failed_portal_list 
+                    display_name_map.get(p['name'], p['name']) for p in failed_portal_list 
                     if portal_results.get(p['name'], {}).get('retry_success', False)
                 ]
                 main_execution_logger.info(f"\n✅ Succeeded on Attempt 2: {', '.join(retry_success_portals)}")
@@ -603,7 +615,7 @@ async def run_api_extraction_mode(playwright, selected_companies):
             # List which portals still failed
             if retry_failed_count > 0:
                 still_failed_portals = [
-                    p['name'] for p in failed_portal_list 
+                    display_name_map.get(p['name'], p['name']) for p in failed_portal_list 
                     if not portal_results.get(p['name'], {}).get('retry_success', False)
                 ]
                 main_execution_logger.info(f"❌ Failed on both attempts: {', '.join(still_failed_portals)}")
@@ -834,8 +846,18 @@ if __name__ == "__main__":
         # Ask for extraction mode
         extraction_mode = get_extraction_mode()
         
+        # For API mode, derive available companies dynamically from active API_PORTAL_GROUPS
+        # This means commenting a portal in API_PORTAL_GROUPS automatically hides it from the menu
+        available_api_companies = None
+        if extraction_mode == 'api':
+            from src.services.company_selector_updated import FUNCTION_TO_COMPANY_MAPPING
+            available_api_companies = [
+                FUNCTION_TO_COMPANY_MAPPING.get(p["name"], p["name"])
+                for p in API_PORTAL_GROUPS["api_portals"]
+            ]
+        
         # Interactive company selection (filtered by mode)
-        selected_companies = get_company_selection(mode=extraction_mode)
+        selected_companies = get_company_selection(mode=extraction_mode, available_api_companies=available_api_companies)
         
         if not selected_companies:
             print("\n❌ No companies selected. Exiting.")
