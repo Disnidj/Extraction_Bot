@@ -63,7 +63,7 @@ class Categories1:
                 f"{selector} option",
                 """els => els.map(e => {
                     const text = e.textContent || '';
-                    return text.replace(/[\r\n]+/g, '').replace(/\s+/g, '').trim();
+                    return text.replace(/[\\r\\n]+/g, '').replace(/\\s+/g, '').trim();
                 })"""
             )
             
