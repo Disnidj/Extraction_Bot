@@ -35,15 +35,15 @@ COMPLETE DATA FLOW (From Extraction to Database):
 
   STEP 1: Cleanup Old Backups
   ┌──────────────────────────────────────┐
-  │ DELETE FROM Backup_Table             │ ← Remove backups > 7 days
-  │ WHERE Backup_Date < (NOW - 7 days)   │
+  │ DELETE FROM Backup_Table             │ ← Remove backups > 28 days
+  │ WHERE Backup_Date < (NOW - 28 days)  │
   └──────────────────────────────────────┘
   
   STEP 2: Backup Original Data (FULL TABLE)
   ┌──────────────────────────────────────┐
   │ SELECT * FROM Original_Table         │ ← Current state snapshot
   │         ↓                            │
-  │ INSERT INTO Backup_Table             │ ← 7-day retention
+  │ INSERT INTO Backup_Table             │ ← 28-day retention
   │                                       │
   │ + Full file backup (.sql/.csv)       │ ← 30-day retention
   └──────────────────────────────────────┘
@@ -114,7 +114,7 @@ TABLE ROLES:
 ├─────────────────────┼──────────────────┼──────────────────────────────┤
 │ Staging             │ Temp workspace   │ At START of next run         │
 │ Original (Lifecare) │ Live production  │ Never (only updated)         │
-│ Backup              │ Safety snapshot  │ After 7 days                 │
+│ Backup              │ Safety snapshot  │ After 28 days                │
 │ Audit               │ Change history   │ Never (permanent)            │
 │ Mapping             │ Name translator  │ Never (reference data)       │
 └─────────────────────┴──────────────────┴──────────────────────────────┘
@@ -603,7 +603,7 @@ class StagingUploader:
         This backup happens in ADDITION to the full table file backup (.sql/.csv).
         Both backup methods run simultaneously during database upload process.
         
-        Backup retention: 7 days (older backups auto-deleted)
+        Backup retention: 28 days (older backups auto-deleted)
         Backup table: Medical_CTN_Cascading_Dropdown_Backup
         
         Args:
@@ -659,7 +659,7 @@ class StagingUploader:
             companies: List of company names to compare
             dropdown_names_by_company: Dict mapping company to set of dropdown names
             backup_count: Number of records backed up to BACKUP_TABLE
-            old_backups_removed: Number of old backup records removed (>7 days)
+            old_backups_removed: Number of old backup records removed (>28 days)
             staging_inserted: Number of new staging records uploaded
             staging_cleared: Number of old staging records cleared before upload
         
@@ -1365,7 +1365,7 @@ class StagingUploader:
             # Start transaction
             self.db.connection.autocommit = False
             
-            # Step 1: Cleanup old backups FIRST (delete backups > 7 days)
+            # Step 1: Cleanup old backups FIRST (delete backups > 28 days)
             old_backups_removed = self.cleanup_old_backups()
             
             # Step 2: Create full backup in BACKUP_TABLE (fresh snapshot before changes)

@@ -19,7 +19,7 @@ from src.pages.qatar.categories_NAS.category_3_page import Category3PageNAS
 from src.pages.qatar.quotation_page import QuotationPage
 from src.pages.qatar.download_page import DownloadPage
 from src.services.excel_service.read_excel import read_excel
-from src.utils.load_yaml import AURA_GENERATED_CENSUS_DIR, MAX_SLEEP
+from src.utils.load_yaml import AURA_GENERATED_CENSUS_DIR, MAX_SLEEP, IS_HEADLESS
 
 #from src.utils.logger import logger
 from src.utils.logger import qatar_logger
@@ -55,7 +55,7 @@ async def login_qatar(playwright: Playwright, referral_id):
 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context(accept_downloads=True)
     context.set_default_timeout(60000)
 

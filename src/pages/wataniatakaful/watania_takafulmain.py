@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from playwright.async_api import Playwright
 from src.pages.wataniatakaful.login_page import LoginPage
-from src.utils.load_yaml import ATTACHMENTS_SAVE_DIR,AURA_GENERATED_CENSUS_DIR
+from src.utils.load_yaml import ATTACHMENTS_SAVE_DIR, AURA_GENERATED_CENSUS_DIR, IS_HEADLESS
 from src.services.excel_service.read_excel import read_excel
 import asyncio
 from src.utils.logger import wataniatakaful_logger
@@ -59,7 +59,7 @@ async def login_wataniatakaful(playwright: Playwright, referral_id):
     print(f"Number of unique categories: {num_categories}")
 
     # Launch the browser
-    browser = await playwright.chromium.launch(headless=False)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS)
     context = await browser.new_context()
     context.set_default_timeout(60000)
     page = await context.new_page()

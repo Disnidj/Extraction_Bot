@@ -7,7 +7,7 @@ from src.pages.fidelity.categories.category_2_page import Category2Page
 from src.pages.fidelity.categories.category_3_page import Category3Page
 from src.services.excel_service.read_excel import read_excel
 from src.utils.logger import fidelity_logger
-from src.utils.load_yaml import MED_SLEEP, MAX_SLEEP
+from src.utils.load_yaml import MED_SLEEP, MAX_SLEEP, IS_HEADLESS
 import asyncio
 
 
@@ -71,7 +71,7 @@ async def login_fidelity(playwright: async_playwright, referral_id):
 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context(accept_downloads=True)
     # Set the default timeout to 60 seconds
     #  *** customize this timeout based on your requirement ***

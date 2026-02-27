@@ -86,7 +86,7 @@ class ChangeReport:
         original_count: Total records in original table (for comparison scope)
         backup_count: Number of records backed up to BACKUP_TABLE
         full_backup_file: Path to full table backup file (SQL or CSV)
-        old_backups_removed: Number of old backup records removed (>7 days)
+        old_backups_removed: Number of old backup records removed (>28 days)
         staging_cleared: Number of old staging records cleared before upload
         audit_records_logged: Number of change records logged to audit table
     """
@@ -104,7 +104,7 @@ class ChangeReport:
     staging_table: Optional[str] = None  # Name of staging table
     original_table: Optional[str] = None  # Name of original table
     audit_table: Optional[str] = None  # Name of audit table
-    old_backups_removed: int = 0  # Old backup records removed (>7 days)
+    old_backups_removed: int = 0  # Old backup records removed (>28 days)
     staging_cleared: int = 0  # Old staging records cleared before upload
     audit_records_logged: int = 0  # Change records logged to audit table
     protected_groups: int = 0  # Groups skipped from deletion (safety for API errors)

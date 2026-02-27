@@ -93,7 +93,7 @@ rak:
 
 takaful:
   email: "quotes@lifecareinternational.com"
-  password: "Lifecare2025!!"
+  password: "Lifecare2026!!"
   quotation_download_dir: "company_data/takaful/quotation_sheets"
 
 NLG:
@@ -267,7 +267,7 @@ captcha:
   api_key: "7da6201c72dca5a9798203eec1d6bb66"
 
 modes:
-  headless: False
+  headless: True
   parallel: false
 
 sleep:

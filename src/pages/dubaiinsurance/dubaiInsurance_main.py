@@ -9,6 +9,7 @@ from src.pages.dubaiinsurance.categories.categories2 import Categories2
 from src.pages.dubaiinsurance.categories.categories3 import Categories3
 
 from src.utils.logger import dubaiinsurance_logger as logger
+from src.utils.load_yaml import IS_HEADLESS
 import asyncio
 
 async def login_dubaiInsurance(playwright: Playwright, referral_id):
@@ -30,7 +31,7 @@ async def login_dubaiInsurance(playwright: Playwright, referral_id):
     try:
             # Launch the browser
             args = ["--disable-blink-features=AutomationControlled"]
-            browser = await playwright.chromium.launch(headless=False, args=args)
+            browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
             context = await browser.new_context()
             context.set_default_timeout(60000)
             page = await context.new_page()

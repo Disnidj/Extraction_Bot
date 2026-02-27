@@ -9,7 +9,7 @@ from src.pages.adnic.categories.category_LSB_page import CategoryLSBPage
 from src.services.excel_service.read_excel import read_excel
 from src.utils.logger import adnic_logger
 import pandas as pd
-from src.utils.load_yaml import ADNIC_GENERATED_CENSUS_DIR
+from src.utils.load_yaml import ADNIC_GENERATED_CENSUS_DIR, IS_HEADLESS
 import os
 
 # Main function to login to the ADNIC portal
@@ -70,7 +70,7 @@ async def login_adnic(playwright: Playwright, referral_id):
 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context(accept_downloads=True)
     # Set the default timeout to 60 seconds
     #  *** customize this timeout based on your requirement ***

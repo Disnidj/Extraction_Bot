@@ -9,6 +9,7 @@ from src.pages.ison.categories.categories2 import Categories2
 from src.pages.ison.categories.categories3 import Categories3
 from src.services.excel_service.read_excel import read_excel
 from src.utils.logger import ison_logger
+from src.utils.load_yaml import IS_HEADLESS
 
 async def login_ison(playwright: Playwright, referral_id):
 
@@ -38,7 +39,7 @@ async def login_ison(playwright: Playwright, referral_id):
     browser = None 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context()
     context.set_default_timeout(60000)
     page = await context.new_page()

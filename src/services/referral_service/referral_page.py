@@ -2,7 +2,7 @@ from patchright.async_api import Playwright
 from src.pages.orient.orient_main import LoginPage
 from src.utils.enums import Orient_Status
 from src.services.db_service.update import update_last_check_datetime
-from src.utils.load_yaml import ORIENT_QUOTATION_DIR,MAX_SLEEP
+from src.utils.load_yaml import ORIENT_QUOTATION_DIR, MAX_SLEEP, IS_HEADLESS
 from src.services.referral_service.final_process import run_portals
 from src.utils.logger import logger
 import os
@@ -13,7 +13,7 @@ async def go_to_iq_referrals_page(playwright: Playwright, iq_quotation_numbers):
 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context(accept_downloads=True)
     context.set_default_timeout(60000)
     page = await context.new_page()

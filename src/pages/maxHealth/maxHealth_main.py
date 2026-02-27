@@ -5,6 +5,7 @@ import pandas as pd
 from src.pages.maxHealth.login import Login
 from src.pages.maxHealth.newCase import NewCase
 from src.utils.logger import maxhealth_logger 
+from src.utils.load_yaml import IS_HEADLESS
 
 async def login_maxHealth(playwright: Playwright, referral_id):
 
@@ -25,7 +26,7 @@ async def login_maxHealth(playwright: Playwright, referral_id):
     browser = None  # Define `browser` outside the try block
     try:
             # Launch the browser
-            browser = await playwright.chromium.launch(headless=False)
+            browser = await playwright.chromium.launch(headless=IS_HEADLESS)
             context = await browser.new_context()
             context.set_default_timeout(60000)
             page = await context.new_page()

@@ -8,6 +8,7 @@ from src.utils.cookies import orient_cookies
 from src.pages.dni.download_page import DownloadPage
 from src.services.excel_service.read_excel import read_excel
 from src.utils.logger import dni_logger
+from src.utils.load_yaml import IS_HEADLESS
 
 async def login_dni(playwright: Playwright, referral_id):
     # Get the pandas dataframes from the Excel file
@@ -35,7 +36,7 @@ async def login_dni(playwright: Playwright, referral_id):
 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context(accept_downloads=True)
     context.set_default_timeout(60000)
 

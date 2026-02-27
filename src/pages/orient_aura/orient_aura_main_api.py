@@ -10,6 +10,7 @@ from playwright.async_api import Playwright, async_playwright
 from src.pages.orient_aura.login_page import LoginPage
 from src.pages.orient_aura.api import OrientAuraAuthToken, OrientAuraAPIExtractor, OrientAuraFormatter
 from src.utils.logger import orient_aura_logger
+from src.utils.load_yaml import IS_HEADLESS
 
 
 async def login_and_get_token(playwright: Playwright):
@@ -23,7 +24,7 @@ async def login_and_get_token(playwright: Playwright):
         OrientAuraAuthToken: Auth object with token set, or None on failure
     """
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context()
     page = await context.new_page()
     

@@ -8,6 +8,7 @@ from playwright.async_api import Playwright
 from src.pages.takaful.login_page import LoginPage
 from src.pages.takaful.api import TakafulAuthToken, TakafulAPIExtractor, TakafulFormatter
 from src.utils.logger import takaful_logger
+from src.utils.load_yaml import IS_HEADLESS
 
 
 async def login_and_get_token(playwright: Playwright):
@@ -21,7 +22,7 @@ async def login_and_get_token(playwright: Playwright):
         TakafulAuthToken: Auth object with token set, or None on failure
     """
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context()
     page = await context.new_page()
     

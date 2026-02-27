@@ -10,7 +10,7 @@ from src.pages.takaful.download_page import DownloadPage
 from src.services.excel_service.read_excel import read_excel
 
 from src.utils.logger import takaful_logger
-
+from src.utils.load_yaml import IS_HEADLESS
 import os
 
 
@@ -36,7 +36,7 @@ async def login_takaful(playwright: Playwright, referral_id):
 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context(accept_downloads=True)
     context.set_default_timeout(20000)
 

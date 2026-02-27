@@ -13,6 +13,7 @@ Unlike Takaful (JWT token), ADNIC uses session cookies that require:
 """
 
 from patchright.async_api import Playwright, Page, BrowserContext
+from src.utils.load_yaml import IS_HEADLESS
 from src.pages.adnic.login_page import LoginPage
 from src.utils.logger import adnic_logger
 from src.utils.load_yaml import ADNIC_GENERATED_CENSUS_DIR
@@ -53,7 +54,7 @@ class ADNICAuth:
         
         try:
             args = ["--disable-blink-features=AutomationControlled"]
-            self.browser = await self.playwright.chromium.launch(headless=False, args=args)
+            self.browser = await self.playwright.chromium.launch(headless=IS_HEADLESS, args=args)
             self.context = await self.browser.new_context()
             self.context.set_default_timeout(60000)
             self.page = await self.context.new_page()

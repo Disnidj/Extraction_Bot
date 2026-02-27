@@ -7,6 +7,7 @@ from src.pages.nlg.categories.category_2_page import Category2Page
 from src.pages.nlg.categories.category_3_page import Category3Page
 from src.services.excel_service.read_excel import read_excel
 from src.utils.logger import nlg_logger
+from src.utils.load_yaml import IS_HEADLESS
 
 async def login_nlg(playwright: async_playwright, referral_id):
     # Get the pandas dataframes from the Excel file
@@ -36,7 +37,7 @@ async def login_nlg(playwright: async_playwright, referral_id):
     
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context(accept_downloads=True)
     context.set_default_timeout(60000)
     page = await context.new_page()

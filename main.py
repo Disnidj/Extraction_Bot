@@ -87,7 +87,7 @@ PORTAL_GROUPS = {
 API_PORTAL_GROUPS = {
     "api_portals": [
         {"function": login_adnic_api, "name": "ADNIC"},
-        # {"function": run_takaful_api_extraction, "name": "Takaful"},
+        {"function": run_takaful_api_extraction, "name": "Takaful"},
         {"function": run_qatar_api_extraction, "name": "QATAR"},
         {"function": run_maxhealth_api_extraction, "name": "MaxHealth"},
         {"function": run_sukoon_api_extraction, "name": "Sukoon"},

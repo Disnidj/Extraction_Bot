@@ -8,6 +8,7 @@ import json
 import os
 from datetime import datetime
 from playwright.async_api import Playwright, async_playwright
+from src.utils.load_yaml import IS_HEADLESS
 from src.pages.maxHealth.login import Login
 from src.pages.maxHealth.api import (
     MaxHealthAuthToken, 
@@ -29,7 +30,7 @@ async def login_and_get_token(playwright: Playwright):
         tuple: (MaxHealthAuthToken, page) or (None, None) on failure
     """
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args)
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args)
     context = await browser.new_context()
     page = await context.new_page()
     

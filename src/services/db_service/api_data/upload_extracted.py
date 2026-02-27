@@ -20,7 +20,7 @@ KEY FEATURES:
 - ✅ Mapping happens BEFORE staging upload (data already standardized)
 - ✅ Only changed records are modified (unchanged data untouched)
 - ✅ Detects whitespace and case differences
-- ✅ Selective backup (only affected rows, 7-day retention)
+- ✅ Selective backup (only affected rows, 28-day retention)
 - ✅ Full audit trail (permanent change history)
 - ✅ Transaction safety (rollback on error)
 

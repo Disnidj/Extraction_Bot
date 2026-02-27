@@ -15,7 +15,7 @@ Sukoon requires session cookies + F5 security tokens:
 from patchright.async_api import Playwright, Page, BrowserContext
 from src.pages.sukoon.login_page import LoginPage
 from src.utils.logger import sukoon_logger
-from src.utils.load_yaml import SUKOON_GENERATED_CENSUS_DIR
+from src.utils.load_yaml import SUKOON_GENERATED_CENSUS_DIR, IS_HEADLESS
 import asyncio
 import os
 import html
@@ -54,7 +54,7 @@ class SukoonAuth:
         
         try:
             args = ["--disable-blink-features=AutomationControlled"]
-            self.browser = await self.playwright.chromium.launch(headless=False, args=args)
+            self.browser = await self.playwright.chromium.launch(headless=IS_HEADLESS, args=args)
             self.context = await self.browser.new_context()
             self.context.set_default_timeout(60000)
             self.page = await self.context.new_page()

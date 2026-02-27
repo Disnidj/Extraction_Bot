@@ -9,6 +9,7 @@ from src.pages.rak.download_page import DownloadPage
 from src.services.excel_service.read_excel import read_excel
 # from src.utils.portal_logger import setup_portal_logger
 from src.utils.logger import rak_logger
+from src.utils.load_yaml import IS_HEADLESS
 
 async def login_rak(playwright: Playwright, referral_id):
     
@@ -40,7 +41,7 @@ async def login_rak(playwright: Playwright, referral_id):
 
     # Launch the browser
     args = ["--disable-blink-features=AutomationControlled"]
-    browser = await playwright.chromium.launch(headless=False, args=args, channel="msedge")
+    browser = await playwright.chromium.launch(headless=IS_HEADLESS, args=args, channel="msedge")
     context = await browser.new_context(accept_downloads=True)
     context.set_default_timeout(180000)
 
