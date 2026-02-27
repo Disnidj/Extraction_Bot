@@ -146,12 +146,13 @@ class MaxHealthAPIClient:
                     msg = result.get('message', 'Unknown error')
                     maxhealth_logger.warning(f"API returned error: {msg}")
                     print(f"      ⚠️ API error: {msg}")
-                    return None
+                    return {"isBizRule": True}  # Business rule rejection, not a technical failure
             else:
                 maxhealth_logger.error(f"Upload failed {response.status_code}: {response.text[:200]}")
                 print(f"      ⚠️ HTTP {response.status_code}: {response.text[:100]}")
-                return None
+                return None  # Real HTTP failure
                     
         except Exception as e:
             maxhealth_logger.error(f"Upload census failed: {e}")
-            return None
+            print(f"      ⚠️ Request error: {e}")
+            return None  # Real technical failure

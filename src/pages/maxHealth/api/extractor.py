@@ -192,7 +192,7 @@ class MaxHealthExtractor:
                     # Get plans for this combination
                     response = await client.get_plans_by_upload(network_id, product_id)
                     
-                    if response and response.get("isSuccess"):
+                    if response and response.get("isSuccess") and not response.get("isBizRule"):
                         data = response.get("data", {})
                         
                         # Extract plans from dhaPlans ONLY (Dubai restriction)
@@ -221,8 +221,10 @@ class MaxHealthExtractor:
                             print(f"✓ {len(plans)} plans (Dubai/DHA)")
                         else:
                             print("⚠️ No DHA plans")
+                    elif response and response.get("isBizRule"):
+                        print("⏭️ Skipped (no plans for this combination)")
                     else:
-                        print("❌ Failed")
+                        print("❌ Failed (technical error)")
         
         return self.results
     
