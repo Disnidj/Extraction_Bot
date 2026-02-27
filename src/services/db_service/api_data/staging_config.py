@@ -14,7 +14,7 @@ ORIGINAL_TABLE = "Medical_CTN_Cascading_Dropdown_Lifecare"
 # Staging table for new extraction data (before comparison)
 STAGING_TABLE = "Medical_CTN_Cascading_Dropdown_Staging"
 
-# Backup table for data before changes (7-day retention)
+# Backup table for data before changes (28-day retention)
 BACKUP_TABLE = "Medical_CTN_Cascading_Dropdown_Backup"
 
 # Audit table for change history
@@ -29,7 +29,7 @@ MAPPING_TABLE = "Medical_CTN_Portal_Field_Mapping"
 # =============================================================================
 
 # Number of days to keep backups
-BACKUP_RETENTION_DAYS = 7
+BACKUP_RETENTION_DAYS = 28
 
 # Number of days to keep audit logs (optional cleanup)
 AUDIT_RETENTION_DAYS = 30

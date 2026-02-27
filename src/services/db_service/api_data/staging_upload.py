@@ -1245,7 +1245,7 @@ class StagingUploader:
         print(f"   ✓ Staging table cleared ({affected} rows removed)")
     
     def cleanup_old_backups(self) -> int:
-        """Remove backups older than retention period (7 days).
+        """Remove backups older than retention period (28 days).
         
         Returns:
             Number of old backup records removed
@@ -1289,7 +1289,7 @@ class StagingUploader:
         Complete flow (all within single database transaction):
         
         STEP 1: Cleanup Old Backups
-           - DELETE backup records older than 7 days
+           - DELETE backup records older than 28 days
            - Free up space before creating new backup
            
         STEP 2: Backup Original Data
