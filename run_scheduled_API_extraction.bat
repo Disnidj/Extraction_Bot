@@ -1,6 +1,6 @@
 @echo off
 title API Extraction Bot - Automated Run
-cd /d "%~dp0"
+cd /d "C:\Users\mandinu.m\Documents\GitHub\Extraction_Bot"
 
 REM Activate virtual environment
 call venv\Scripts\activate.bat
