@@ -25,8 +25,8 @@ from .mapping import PORTAL_REGION
 # Portal name for this formatter
 PORTAL_NAME = "sukoon"
 
-# Default Broker ID - can be configured
-DEFAULT_BROKER_ID = 3
+# Default Broker ID - placeholder (will be overwritten during upload)
+DEFAULT_BROKER_ID = 0
 
 # Sukoon-specific dropdown name mapping
 # Maps extraction field names to portal-specific names that match the mapping table

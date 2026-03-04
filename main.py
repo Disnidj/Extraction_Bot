@@ -36,6 +36,16 @@ from src.pages.qic_healthx.qic_healthx_main_api import run_qic_healthx_api_extra
 from src.pages.alsagr.alsagr_main_api import login_alsagr_api
 from src.services.db_service.api_data.upload_extracted import upload_to_database
 from src.utils.logger import set_current_request_id, issues_logger, logger, main_execution_logger, clear_all_logs
+
+# --- Multi-broker support imports ---
+from src.utils.cli_args import parse_cli_arguments
+from src.services.broker_service.broker_manager import (
+    select_brokers_interactive,
+    select_brokers_from_cli,
+    confirm_broker_selection
+)
+from src.services.broker_service.portal_mapper import PortalMapper
+from src.config.broker_config import get_broker_name, get_broker_summary
 from src.services.extraction_report.report_generator import generate_extraction_report
 from src.utils.logger import set_current_request_id, issues_logger
 from src.utils.logger import set_current_request_id, logger
@@ -97,6 +107,19 @@ API_PORTAL_GROUPS = {
         {"function": login_alsagr_api, "name": "AL SAGR"},
         # {"function": run_qic_healthx_api_extraction, "name": "QIC HealthX Exclusive"},
     ]
+}
+
+# Portal name to folder name mapping (used for finding extracted files)
+PORTAL_FOLDER_MAPPING = {
+    "ADNIC": "adnic",
+    "Takaful": "takaful",
+    "QATAR": "qatar",
+    "MaxHealth": "maxhealth",
+    "Sukoon": "sukoon",
+    "Orient Aura": "orient_aura",
+    "NLGI Aura": "nlgi_aura",
+    "AL SAGR": "alsagr",
+    "QIC HealthX Exclusive": "qic_healthx"
 }
 
 # === RETRY CONFIGURATION ===
@@ -232,49 +255,160 @@ def get_extraction_mode():
             print("Invalid choice. Please enter 1 or 2.")
 
 
-async def run_api_extraction_mode(playwright, selected_companies, skip_confirmation=False):
+async def run_api_extraction_mode(playwright, selected_companies=None, skip_confirmation=False, broker_ids=None):
     """
-    Run API-based extraction mode with timing tracking.
+    Run API-based extraction mode with multi-broker support and timing tracking.
     
     Args:
         playwright: Playwright instance
-        selected_companies: List of selected company names
+        selected_companies: List of selected company names (optional - can use broker-based selection)
         skip_confirmation: If True, bypass the interactive confirmation prompt (used for scheduled runs)
+        broker_ids: Pre-selected broker IDs from CLI (optional)
     """
+    print("\n" + "=" * 70)
+    print("🚀 API EXTRACTION MODE (Multi-Broker Support)")
+    print("=" * 70)
+    
+    # Step 1: Determine which brokers to run for
+    if broker_ids is None:
+        # Interactive broker selection
+        broker_ids = select_brokers_interactive()
+        if broker_ids is None:
+            print("❌ No brokers selected. Exiting...")
+            return
+    
+    print(f"\n✅ Running extraction for {len(broker_ids)} broker(s):")
+    for broker_id in broker_ids:
+        print(f"   • Broker {broker_id} - {get_broker_name(broker_id)}")
+    
+    # Step 2: Fetch portals for selected brokers from database
+    print(f"\n🔍 Fetching portals from database...")
+    portal_mapper = PortalMapper()
+    portal_analysis = portal_mapper.analyze_portal_distribution(broker_ids)
+    
+    print(f"\n✅ Found {portal_analysis['total_unique']} unique portals")
+    
+    # Step 3: Display portal breakdown
+    if portal_analysis['shared']:
+        print(f"\n📋 Shared Portals ({len(portal_analysis['shared'])}):")
+        for portal, broker_list in portal_analysis['shared'].items():
+            broker_names = [f"Broker {bid}" for bid in broker_list]
+            print(f"   • {portal} → {', '.join(broker_names)}")
+    
+    if portal_analysis['unique']:
+        print(f"\n📋 Broker-Specific Portals ({len(portal_analysis['unique'])}):")
+        for portal, broker_id in portal_analysis['unique'].items():
+            print(f"   • {portal} → Broker {broker_id}")
+    
+    # Step 3.5: Portal Selection (unless scheduled mode)
+    # Get all unique portals available for selected brokers
+    all_portals_for_brokers = set(portal_analysis['shared'].keys()) | set(portal_analysis['unique'].keys())
+    
     # Filter to portals with API extraction available
     api_portals = API_PORTAL_GROUPS["api_portals"]
-    api_portal_names = [p["name"] for p in api_portals]
-    
-    # Map selected companies to portal names (preserving order)
-    from src.services.company_selector_updated import COMPANY_TO_FUNCTION_MAPPING
-    selected_portal_names = [COMPANY_TO_FUNCTION_MAPPING.get(c, c) for c in selected_companies]
-    
-    # Create lookup for API portals
     api_portal_lookup = {p["name"]: p for p in api_portals}
     
-    # Find matching API portals IN USER'S SELECTION ORDER
-    matching_portals = []
-    unavailable = []
-    for portal_name in selected_portal_names:
-        if portal_name in api_portal_lookup:
-            matching_portals.append(api_portal_lookup[portal_name])
-        else:
-            unavailable.append(portal_name)
+    # Get available portals (with API implementation)
+    available_portal_names = sorted([p for p in all_portals_for_brokers if p in api_portal_lookup])
+    unavailable_portals = sorted([p for p in all_portals_for_brokers if p not in api_portal_lookup])
     
-    if unavailable:
-        print(f"\n⚠️  No API extraction implemented yet for: {', '.join(unavailable)}")
-        print("   These will be skipped.")
-    
-    if not matching_portals:
-        print("\n❌ None of the selected portals have API extraction implemented.")
-        print(f"   Available API portals: {', '.join(api_portal_names)}")
+    if not available_portal_names:
+        print("\n❌ None of the portals have API extraction implemented.")
+        print(f"   Available API portals: {', '.join([p['name'] for p in api_portals])}")
         return
+    
+    # Portal selection (interactive or scheduled)
+    if skip_confirmation:
+        # Scheduled mode: run all available portals
+        selected_portal_names = available_portal_names
+        print(f"\n▶️  Scheduled mode - extracting all {len(selected_portal_names)} available portals")
+    else:
+        # Interactive mode: let user select portals
+        from src.services.company_selector_updated import FUNCTION_TO_COMPANY_MAPPING
+        
+        print("\n" + "=" * 70)
+        print("📋 SELECT PORTALS TO EXTRACT")
+        print("=" * 70)
+        
+        # Display available portals with numbers
+        for idx, portal_name in enumerate(available_portal_names, 1):
+            display_name = FUNCTION_TO_COMPANY_MAPPING.get(portal_name, portal_name)
+            print(f"{idx:2d}. {display_name}")
+        
+        print("-" * 70)
+        print(" 0. Exit")
+        print("all. Select ALL Available Portals")
+        print("=" * 70)
+        
+        if unavailable_portals:
+            print(f"\n⚠️  No API implementation yet: {', '.join(unavailable_portals)}")
+        
+        print(f"\n💡 How to select:")
+        print(f"   • Single portal:    Enter number (e.g., 1)")
+        print(f"   • Multiple portals: Enter comma-separated (e.g., 1,2,5)")
+        print(f"   • All portals:      Enter 'all'")
+        print(f"   • Exit:             Enter '0'\n")
+        
+        while True:
+            user_input = input("Enter portal numbers: ").strip().lower()
+            
+            if user_input == '0':
+                print("👋 Cancelled.")
+                return
+            
+            if user_input == 'all':
+                selected_portal_names = available_portal_names
+                break
+            
+            # Parse comma-separated numbers
+            try:
+                selected_indices = [int(x.strip()) for x in user_input.split(',') if x.strip()]
+                
+                # Validate indices
+                if not selected_indices:
+                    print("❌ No portals selected. Please try again.")
+                    continue
+                
+                if any(idx < 1 or idx > len(available_portal_names) for idx in selected_indices):
+                    print(f"❌ Invalid selection. Please enter numbers between 1 and {len(available_portal_names)}")
+                    continue
+                
+                # Get selected portal names
+                selected_portal_names = [available_portal_names[idx - 1] for idx in selected_indices]
+                break
+                
+            except ValueError:
+                print("❌ Invalid input. Please enter numbers or 'all'")
+                continue
+        
+        print(f"\n✅ Selected {len(selected_portal_names)} portal(s):")
+        for portal_name in selected_portal_names:
+            display_name = FUNCTION_TO_COMPANY_MAPPING.get(portal_name, portal_name)
+            print(f"   • {display_name}")
+    
+    # Step 4: Confirmation (unless skipped)
+    if not skip_confirmation:
+        # Update portal_analysis to only include selected portals
+        filtered_analysis = {
+            'total_unique': len(selected_portal_names),
+            'shared': {k: v for k, v in portal_analysis['shared'].items() if k in selected_portal_names},
+            'unique': {k: v for k, v in portal_analysis['unique'].items() if k in selected_portal_names}
+        }
+        
+        if not confirm_broker_selection(broker_ids, filtered_analysis):
+            print("\n❌ Extraction cancelled by user")
+            return
+    else:
+        print("\n▶️  Scheduled run - starting extraction automatically...")
+    
+    # Filter to selected portals only
+    matching_portals = [api_portal_lookup[pname] for pname in selected_portal_names]
     
     # Build display name map: portal name → proper company name for logs/prints
     from src.services.company_selector_updated import FUNCTION_TO_COMPANY_MAPPING
     display_name_map = {p['name']: FUNCTION_TO_COMPANY_MAPPING.get(p['name'], p['name']) for p in matching_portals}
     
-    print(f"\n✅ Will extract from:")
+    print(f"\n✅ Will extract from {len(matching_portals)} portal(s):")
     for p in matching_portals:
         print(f"   • {display_name_map[p['name']]}")
     
@@ -284,15 +418,6 @@ async def run_api_extraction_mode(playwright, selected_companies, skip_confirmat
         print(f"   Retry delay: {RETRY_DELAY_SECONDS} seconds")
     else:
         print(f"\n⚠️  Auto-retry disabled")
-    
-    # Confirm
-    if skip_confirmation:
-        print("\n▶️  Scheduled run - skipping confirmation prompt, starting automatically...")
-    else:
-        confirm = input("\n▶️  Press Enter to start API extraction (or 'q' to quit): ").strip().lower()
-        if confirm == 'q':
-            print("👋 Cancelled.")
-            return
     
     # Record overall start time
     overall_start_time = datetime.now()
@@ -624,91 +749,113 @@ async def run_api_extraction_mode(playwright, selected_companies, skip_confirmat
             
             main_execution_logger.info(f"{'='*70}\n")
 
-    # Upload extracted data to database
+    # Upload extracted data to database using multi-broker uploader
     print("\n" + "=" * 70)
-    print("📤 DATABASE UPLOAD")
+    print("📤 DATABASE UPLOAD (Multi-Broker)")
     print("=" * 70)
     
     db_upload_start = datetime.now()
-    success, rows_changed, upload_msg, deletion_details, mapping_details, change_report = upload_to_database(run_output_dir)
+    
+    # Initialize multi-broker uploader with run_id and broker_ids
+    from src.services.db_service.api_data.multi_broker_upload import MultiBrokerUploader
+    import glob
+    
+    multi_uploader = MultiBrokerUploader(
+        run_id=run_timestamp,
+        selected_broker_ids=broker_ids
+    )
+    
+    # Upload each successfully extracted portal
+    upload_results = []
+    
+    for portal in matching_portals:
+        portal_name = portal['name']
+        
+        # Skip if extraction failed
+        if not portal_results.get(portal_name, {}).get('success', False):
+            print(f"\n⚠️  Skipping upload for {portal_name} (extraction failed)")
+            continue
+        
+        # Find extracted file for this portal
+        # Use mapping to get folder name
+        portal_folder = PORTAL_FOLDER_MAPPING.get(portal_name)
+        
+        if not portal_folder:
+            print(f"\n⚠️  Unknown portal folder mapping for {portal_name}")
+            continue
+        
+        portal_path = os.path.join(run_output_dir, portal_folder)
+        
+        if not os.path.exists(portal_path):
+            print(f"\n⚠️  No extracted data folder found for {portal_name} at {portal_path}")
+            continue
+        
+        # Find the extracted text file
+        extracted_files = glob.glob(os.path.join(portal_path, "*_extracted_*.txt"))
+        
+        if not extracted_files:
+            print(f"\n⚠️  No extracted file found for {portal_name}")
+            continue
+        
+        extracted_file = extracted_files[0]  # Use first match
+        
+        # Upload this portal's data
+        result = multi_uploader.upload_portal_data(
+            portal_name=portal_name,
+            extracted_file_path=extracted_file
+        )
+        
+        upload_results.append(result)
+    
     db_upload_end = datetime.now()
     db_upload_duration = db_upload_end - db_upload_start
     
-    # Calculate actual staging row count (total rows uploaded to staging)
-    staging_row_count = 0
-    if change_report:
-        staging_row_count = (
-            len(change_report.new_records) + 
-            len(change_report.modified_records) + 
-            len(change_report.deleted_records) + 
-            change_report.unchanged_count
-        )
+    # Calculate summary
+    successful_uploads = sum(1 for r in upload_results if r.get('status') == 'success')
+    failed_uploads = len(upload_results) - successful_uploads
     
-    if success:
-        print(f"✅ Database upload complete: {rows_changed} changes applied")
-        
-        main_execution_logger.info(f"\n{'='*70}")
-        main_execution_logger.info(f"📤 DATABASE UPLOAD SUMMARY")
-        main_execution_logger.info(f"{'='*70}")
-        main_execution_logger.info(f"   Status: SUCCESS")
-        main_execution_logger.info(f"   Total changes: {rows_changed}")
-        main_execution_logger.info(f"   Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
-        main_execution_logger.info(f"   Start: {db_upload_start.strftime('%H:%M:%S')} → End: {db_upload_end.strftime('%H:%M:%S')}")
-        
-        # Log change report details if available
-        if change_report:
-            main_execution_logger.info(f"\n   📊 CHANGE REPORT (Run ID: {change_report.run_id}):")
-            main_execution_logger.info(f"      • New records: {len(change_report.new_records)}")
-            main_execution_logger.info(f"      • Modified records: {len(change_report.modified_records)}")
-            main_execution_logger.info(f"      • Deleted records: {len(change_report.deleted_records)}")
-            main_execution_logger.info(f"      • Unchanged records: {change_report.unchanged_count}")
-            
-            # Log full backup file if created
-            if hasattr(change_report, 'full_backup_file') and change_report.full_backup_file:
-                backup_filename = os.path.basename(change_report.full_backup_file)
-                main_execution_logger.info(f"\n   💾 FULL TABLE BACKUP:")
-                main_execution_logger.info(f"      • File: {backup_filename}")
-                main_execution_logger.info(f"      • Location: {change_report.full_backup_file}")
-                main_execution_logger.info(f"      • Purpose: Complete disaster recovery backup")
-            
-            # Log changes by portal
-            changes_by_company = change_report.get_changes_by_company()
-            if changes_by_company:
-                main_execution_logger.info(f"\n   📋 CHANGES BY PORTAL:")
-                for company, data in changes_by_company.items():
-                    total = len(data['new']) + len(data['modified']) + len(data['deleted'])
-                    main_execution_logger.info(f"      • {company}: {total} changes")
-                    if data['new']:
-                        main_execution_logger.info(f"         - New: {len(data['new'])}")
-                    if data['modified']:
-                        main_execution_logger.info(f"         - Modified: {len(data['modified'])}")
-                    if data['deleted']:
-                        main_execution_logger.info(f"         - Deleted: {len(data['deleted'])}")
-                    # Log dropdown names
-                    if deletion_details and company in deletion_details:
-                        dropdown_names = deletion_details[company].get('dropdown_names', [])
-                        if dropdown_names:
-                            main_execution_logger.info(f"         - Dropdowns: {', '.join(dropdown_names)}")
-        
-        # Log mapping details per portal
-        if mapping_details and mapping_details.get('applied_mappings'):
-            main_execution_logger.info(f"\n   🔄 Dropdown Mappings Applied by Portal:")
-            for company, mappings in mapping_details['applied_mappings'].items():
-                if mappings:
-                    main_execution_logger.info(f"      • {company} ({len(mappings)} mappings):")
-                    for portal_name, db_name in sorted(mappings.items()):
-                        main_execution_logger.info(f"         - {portal_name} → {db_name}")
-        
-        main_execution_logger.info(f"{'='*70}\n")
-    else:
-        print(f"❌ Database upload failed: {upload_msg}")
-        main_execution_logger.error(f"\n{'='*70}")
-        main_execution_logger.error(f"📤 DATABASE UPLOAD SUMMARY")
-        main_execution_logger.error(f"{'='*70}")
-        main_execution_logger.error(f"   Status: FAILED")
-        main_execution_logger.error(f"   Error: {upload_msg}")
-        main_execution_logger.error(f"   Duration: {db_upload_duration.total_seconds():.2f}s")
-        main_execution_logger.error(f"{'='*70}\n")
+    # Display summary
+    print(f"\n{'='*70}")
+    print(f"✅ Multi-Broker Upload Complete")
+    print(f"{'='*70}")
+    print(f"   • Portals processed: {len(upload_results)}")
+    print(f"   • Successful: {successful_uploads}")
+    print(f"   • Failed: {failed_uploads}")
+    print(f"   • Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
+    
+    # Show broker breakdown
+    print(f"\n📊 Breakdown by Broker:")
+    for broker_id in broker_ids:
+        portals_for_broker = [r['portal'] for r in upload_results if r.get('status') == 'success' and broker_id in r.get('brokers', [])]
+        print(f"   • Broker {broker_id} ({get_broker_name(broker_id)}): {len(portals_for_broker)} portals")
+    
+    # Log to main execution logger
+    main_execution_logger.info(f"\n{'='*70}")
+    main_execution_logger.info(f"📤 DATABASE UPLOAD SUMMARY (Multi-Broker)")
+    main_execution_logger.info(f"{'='*70}")
+    main_execution_logger.info(f"   Portals processed: {len(upload_results)}")
+    main_execution_logger.info(f"   Successful: {successful_uploads}")
+    main_execution_logger.info(f"   Failed: {failed_uploads}")
+    main_execution_logger.info(f"   Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
+    main_execution_logger.info(f"   Start: {db_upload_start.strftime('%H:%M:%S')} → End: {db_upload_end.strftime('%H:%M:%S')}")
+    main_execution_logger.info(f"   Brokers: {', '.join([f'Broker {bid}' for bid in broker_ids])}")
+    
+    # Log broker breakdown
+    for broker_id in broker_ids:
+        portals_for_broker = [r['portal'] for r in upload_results if r.get('status') == 'success' and broker_id in r.get('brokers', [])]
+        main_execution_logger.info(f"      • Broker {broker_id} ({get_broker_name(broker_id)}): {len(portals_for_broker)} portals")
+    
+    # Log any failed uploads
+    failed_portals = [r for r in upload_results if r.get('status') != 'success']
+    if failed_portals:
+        main_execution_logger.warning(f"\n   ⚠️  Failed Uploads:")
+        for result in failed_portals:
+            main_execution_logger.warning(f"      • {result['portal']}: {result.get('error', 'Unknown error')}")
+    
+    main_execution_logger.info(f"{'='*70}\n")
+    
+    success = failed_uploads == 0
+    rows_changed = len(upload_results)  # For compatibility with existing code
 
     # ============================================================
     # FINAL SUMMARY: Complete Process Duration
@@ -751,16 +898,16 @@ async def run_api_extraction_mode(playwright, selected_companies, skip_confirmat
             portal_timings=portal_timings,
             portal_results=portal_results,
             db_upload_success=success,
-            db_rows_inserted=staging_row_count,  # Total rows uploaded to staging
+            db_rows_inserted=rows_changed,  # Total uploads count from multi-broker uploader
             db_upload_duration=db_upload_duration.total_seconds(),
             db_upload_start=db_upload_start,
             db_upload_end=db_upload_end,
             total_duration=total_seconds,
             output_folder=run_output_dir,
             portals_processed=[p['name'] for p in matching_portals],
-            deletion_details=deletion_details,
-            mapping_details=mapping_details,
-            change_report=change_report
+            deletion_details=None,  # Not available in multi-broker mode
+            mapping_details=None,  # Not available in multi-broker mode
+            change_report=None  # Not available in multi-broker mode
         )
         print(f"✅ PDF Report generated: {pdf_path}")
         main_execution_logger.info(f"\n{'='*70}")
@@ -800,7 +947,7 @@ async def run_api_extraction_mode(playwright, selected_companies, skip_confirmat
                     portal_results=portal_results,
                     portal_timings=portal_timings,
                     db_upload_success=success,
-                    db_rows_inserted=staging_row_count,  # Total rows uploaded to staging
+                    db_rows_inserted=rows_changed,  # Total uploads from multi-broker uploader
                     db_upload_duration=db_upload_duration.total_seconds(),
                     total_duration=total_seconds,
                     portals_processed=[p['name'] for p in matching_portals],
@@ -808,7 +955,7 @@ async def run_api_extraction_mode(playwright, selected_companies, skip_confirmat
                     recipients_to=NOTIFICATION_RECIPIENTS_TO,
                     recipients_cc=NOTIFICATION_RECIPIENTS_CC,
                     logger=main_execution_logger,
-                    change_report=change_report,
+                    change_report=None,  # Not available in multi-broker mode
                 )
                 
                 if email_sent:
@@ -845,25 +992,48 @@ if __name__ == "__main__":
         print("=" * 70)
         clear_all_logs()
         
-        # Ask for extraction mode
-        extraction_mode = get_extraction_mode()
+        # Parse CLI arguments
+        args = parse_cli_arguments()
         
-        # For API mode, derive available companies dynamically from active API_PORTAL_GROUPS
-        # This means commenting a portal in API_PORTAL_GROUPS automatically hides it from the menu
-        available_api_companies = None
+        # Determine extraction mode
+        if args.mode:
+            extraction_mode = args.mode
+            print(f"\n🔧 CLI Mode: {extraction_mode.upper()}")
+        else:
+            # Interactive mode selection
+            extraction_mode = get_extraction_mode()
+        
+        # Handle mode-specific selections
+        broker_ids = None
+        selected_companies = None
+        skip_confirmation = args.scheduled  # Skip confirmation for scheduled runs
+        
         if extraction_mode == 'api':
-            from src.services.company_selector_updated import FUNCTION_TO_COMPANY_MAPPING
-            available_api_companies = [
-                FUNCTION_TO_COMPANY_MAPPING.get(p["name"], p["name"])
-                for p in API_PORTAL_GROUPS["api_portals"]
-            ]
-        
-        # Interactive company selection (filtered by mode)
-        selected_companies = get_company_selection(mode=extraction_mode, available_api_companies=available_api_companies)
-        
-        if not selected_companies:
-            print("\n❌ No companies selected. Exiting.")
-            return
+            # =====================================================
+            # API MODE: Use broker selection (CLI or interactive)
+            # =====================================================
+            if args.brokers:
+                # CLI-based broker selection
+                broker_ids = select_brokers_from_cli(args.brokers)
+                if broker_ids is None:
+                    print("❌ Invalid broker selection. Exiting.")
+                    return
+                print(f"✅ CLI Broker Selection: {', '.join([f'Broker {bid}' for bid in broker_ids])}")
+            else:
+                # Interactive broker selection
+                broker_ids = select_brokers_interactive()
+                if broker_ids is None:
+                    print("\n❌ No brokers selected. Exiting.")
+                    return
+        else:
+            # =====================================================
+            # STANDARD MODE: Use company selection (old flow)
+            # =====================================================
+            selected_companies = get_company_selection(mode=extraction_mode, available_api_companies=None)
+            
+            if not selected_companies:
+                print("\n❌ No companies selected. Exiting.")
+                return
 
         async with async_playwright() as playwright:
             
@@ -874,7 +1044,12 @@ if __name__ == "__main__":
                 print("\n" + "=" * 70)
                 print("🔌 API EXTRACTION MODE")
                 print("=" * 70)
-                await run_api_extraction_mode(playwright, selected_companies)
+                await run_api_extraction_mode(
+                    playwright, 
+                    selected_companies=selected_companies,
+                    skip_confirmation=skip_confirmation,
+                    broker_ids=broker_ids
+                )
                 return
             
             # =====================================================

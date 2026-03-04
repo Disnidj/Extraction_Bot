@@ -19,8 +19,8 @@ from src.utils.logger import qic_healthx_logger
 from .mapping import PORTAL_NAME, PORTAL_REGION, TPA_NAME
 
 
-# Default Broker ID
-DEFAULT_BROKER_ID = 3
+# Default Broker ID - placeholder (will be overwritten during upload)
+DEFAULT_BROKER_ID = 0
 
 
 class QICHealthXFormatter:

@@ -65,19 +65,43 @@ COMPANY_TO_FUNCTION_MAPPING = {
 
 
 # Reverse mapping: portal function name → proper company display name
-FUNCTION_TO_COMPANY_MAPPING = {v: k for k, v in COMPANY_TO_FUNCTION_MAPPING.items()}
+# Shows both friendly name and technical name for clarity
+FUNCTION_TO_COMPANY_MAPPING = {
+    "ADNIC": "ADNIC",
+    "Takaful": "TAKAFUL EMARAT (Takaful)",
+    "QATAR": "QATAR INSURANCE CO (QATAR)",
+    "MaxHealth": "MaxHealth",
+    "Sukoon": "SUKOON INSURANCE (Sukoon)",
+    "Orient Aura": "Orient Aura",
+    "NLGI Aura": "Liva Globalcare (NLGI Aura)",
+    "AL SAGR": "AL SAGR INSURANCE COMPANY (AL SAGR)",
+    "QIC HealthX Exclusive": "QIC HealthX Exclusive",
+    # Legacy mappings for standard extraction
+    "Medgulf": "Medgulf",
+    "Orient": "ORIENT INSURANCE PJSC",
+    "Alittihad_Alwatani": "Al Ittihad Al Watani",
+    "GIG": "GIG Insurance",
+    "Dubaiinsurance": "DUBAI INSURANCE CO",
+    "DNI": "Dubai National Insurance And Reinsurance Co",
+    "ISON": "ISON",
+    "Wataniatakaful": "Watania Takaful",
+    "NLG": "NLGIC",
+    "Fidelity": "Fidelity United",
+    "Daman": "Daman Insurance",
+    "RAK": "RAK INSURANCE"
+}
 
 
 # Companies that have API extraction implemented
 API_ENABLED_COMPANIES = [
     "ADNIC",                    # #5
-    "TAKAFUL EMARAT",           # #2
-    "QATAR INSURANCE CO",       # #11
+    "TAKAFUL EMARAT (Takaful)",           # #2
+    "QATAR INSURANCE CO (QATAR)",       # #11
     "MaxHealth",                # #18
-    "SUKOON INSURANCE",         # #9
+    "SUKOON INSURANCE (Sukoon)",         # #9
     "Orient Aura",              # #19
-    "Liva Globalcare",          # #20 (NLGI Aura)
-    "AL SAGR INSURANCE COMPANY", # #6
+    "Liva Globalcare (NLGI Aura)",          # #20 (NLGI Aura)
+    "AL SAGR INSURANCE COMPANY (AL SAGR)", # #6
     "QIC HealthX Exclusive"     # #21
 ]
 

@@ -16,8 +16,8 @@ from datetime import datetime
 from src.utils.logger import alsagr_logger
 from .mapping import PORTAL_NAME, PORTAL_REGION, FIELD_MAPPING
 
-# Default Broker ID
-DEFAULT_BROKER_ID = 3
+# Default Broker ID - placeholder (will be overwritten during upload)
+DEFAULT_BROKER_ID = 0
 
 # Create reverse mapping: Portal_Field_Name (display) -> Dropdown_Name
 # e.g., "Visa Region" -> "Region", "Aggregate Limit" -> "Annual"

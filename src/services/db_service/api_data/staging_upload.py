@@ -635,7 +635,8 @@ class StagingUploader:
     
     def compare_tables(self, companies: List[str], dropdown_names_by_company: Dict[str, Set[str]], 
                       backup_count: int = 0, old_backups_removed: int = 0, 
-                      staging_inserted: int = 0, staging_cleared: int = 0) -> ChangeReport:
+                      staging_inserted: int = 0, staging_cleared: int = 0,
+                      broker_id: int = None) -> ChangeReport:
         """
         Compare staging table with original table to detect changes.
         
@@ -645,8 +646,9 @@ class StagingUploader:
         This function performs DIRECT comparison:
         - STAGING.Dropdown_Name = ORIGINAL.Dropdown_Name (both already mapped)
         - Exact match on Selection_Value (whitespace-sensitive)
+        - BROKER-AWARE: Compares data for specified Broker_ID or ALL brokers in staging
         
-        Comparison key: (Company, TPA, Network, Region, Dropdown_Name)
+        Comparison key: (Broker_ID, Company, TPA, Network, Region, Dropdown_Name)
         Comparison value: Selection_Value (exact match)
         
         Change Detection:
@@ -662,11 +664,15 @@ class StagingUploader:
             old_backups_removed: Number of old backup records removed (>28 days)
             staging_inserted: Number of new staging records uploaded
             staging_cleared: Number of old staging records cleared before upload
+            broker_id: Broker ID to filter comparison (None = compare ALL brokers in staging)
         
         Returns:
             ChangeReport with all detected changes grouped by portal and dropdown
         """
-        print(f"\n🔍 Comparing staging vs original table...")
+        if broker_id is None:
+            print(f"\n🔍 Comparing staging vs original table (BATCH MODE - ALL BROKERS)...")
+        else:
+            print(f"\n🔍 Comparing staging vs original table for Broker {broker_id}...")
         print(f"   ℹ️  Using EXACT MATCH - whitespace and case differences will be detected")
         
         report = ChangeReport(
@@ -693,25 +699,56 @@ class StagingUploader:
             
             placeholders = ", ".join(["%s"] * len(dropdown_names))
             
-            # Get all staging records for this company
-            staging_query = f"""
-                SELECT Broker_ID, Company, TPA, Network, Region, 
-                       Dropdown_Name, Selection_Value
-                FROM {STAGING_TABLE}
-                WHERE Company = %s AND Run_ID = %s AND Dropdown_Name IN ({placeholders})
-            """
-            params = tuple([company, self.run_id] + list(dropdown_names))
+            # Get staging records - filter by broker if specified, otherwise get all
+            if broker_id is not None:
+                staging_query = f"""
+                    SELECT Broker_ID, Company, TPA, Network, Region, 
+                           Dropdown_Name, Selection_Value
+                    FROM {STAGING_TABLE}
+                    WHERE Broker_ID = %s AND Company = %s AND Run_ID = %s AND Dropdown_Name IN ({placeholders})
+                """
+                params = tuple([broker_id, company, self.run_id] + list(dropdown_names))
+            else:
+                # BATCH MODE: Get ALL brokers in staging for this run
+                staging_query = f"""
+                    SELECT Broker_ID, Company, TPA, Network, Region, 
+                           Dropdown_Name, Selection_Value
+                    FROM {STAGING_TABLE}
+                    WHERE Company = %s AND Run_ID = %s AND Dropdown_Name IN ({placeholders})
+                """
+                params = tuple([company, self.run_id] + list(dropdown_names))
+            
             staging_rows = self._fetch_all(staging_query, params)
             
-            # Get all original records for this company
-            original_query = f"""
-                SELECT Broker_ID, Company, TPA, Network, Region, 
-                       Dropdown_Name, Selection_Value
-                FROM {ORIGINAL_TABLE}
-                WHERE Company = %s AND Dropdown_Name IN ({placeholders})
-            """
-            params = tuple([company] + list(dropdown_names))
-            original_rows = self._fetch_all(original_query, params)
+            # Get original records - need to fetch for ALL brokers present in staging
+            # Extract unique broker IDs from staging data
+            staging_broker_ids = set(row.get('Broker_ID') or row.get('broker_id', 3) for row in staging_rows)
+            
+            if broker_id is not None:
+                # Single broker mode
+                original_query = f"""
+                    SELECT Broker_ID, Company, TPA, Network, Region, 
+                           Dropdown_Name, Selection_Value
+                    FROM {ORIGINAL_TABLE}
+                    WHERE Broker_ID = %s AND Company = %s AND Dropdown_Name IN ({placeholders})
+                """
+                params = tuple([broker_id, company] + list(dropdown_names))
+            else:
+                # BATCH MODE: Get original data for ALL brokers present in staging
+                if not staging_broker_ids:
+                    original_rows = []
+                else:
+                    broker_placeholders = ", ".join(["%s"] * len(staging_broker_ids))
+                    original_query = f"""
+                        SELECT Broker_ID, Company, TPA, Network, Region, 
+                               Dropdown_Name, Selection_Value
+                        FROM {ORIGINAL_TABLE}
+                        WHERE Broker_ID IN ({broker_placeholders}) AND Company = %s AND Dropdown_Name IN ({placeholders})
+                    """
+                    params = tuple(list(staging_broker_ids) + [company] + list(dropdown_names))
+            
+            if broker_id is not None or staging_broker_ids:
+                original_rows = self._fetch_all(original_query, params)
             
             # Build lookup dictionaries
             # Full key includes Selection_Value for exact matching
@@ -719,7 +756,7 @@ class StagingUploader:
             staging_by_base_key = {}  # Key without Selection_Value
             
             for row in staging_rows:
-                broker_id = row.get('Broker_ID') or row.get('broker_id', 3)
+                broker_id_val = row.get('Broker_ID') or row.get('broker_id', 3)
                 comp = row.get('Company') or row.get('company', '')
                 tpa = row.get('TPA') or row.get('tpa', '')
                 network = row.get('Network') or row.get('network', '')
@@ -727,12 +764,13 @@ class StagingUploader:
                 dropdown = row.get('Dropdown_Name') or row.get('dropdown_name', '')
                 value = row.get('Selection_Value') or row.get('selection_value', '')
                 
-                full_key = (comp, tpa, network, region, dropdown, value)
-                base_key = (comp, tpa, network, region, dropdown)
+                # Include Broker_ID in keys for broker-aware comparison
+                full_key = (broker_id_val, comp, tpa, network, region, dropdown, value)
+                base_key = (broker_id_val, comp, tpa, network, region, dropdown)
                 
                 staging_full_keys.add(full_key)
                 staging_by_base_key.setdefault(base_key, []).append({
-                    'broker_id': broker_id,
+                    'broker_id': broker_id_val,
                     'value': value
                 })
             
@@ -740,7 +778,7 @@ class StagingUploader:
             original_by_base_key = {}
             
             for row in original_rows:
-                broker_id = row.get('Broker_ID') or row.get('broker_id', 3)
+                broker_id_val = row.get('Broker_ID') or row.get('broker_id', 3)
                 comp = row.get('Company') or row.get('company', '')
                 tpa = row.get('TPA') or row.get('tpa', '')
                 network = row.get('Network') or row.get('network', '')
@@ -748,12 +786,13 @@ class StagingUploader:
                 dropdown = row.get('Dropdown_Name') or row.get('dropdown_name', '')
                 value = row.get('Selection_Value') or row.get('selection_value', '')
                 
-                full_key = (comp, tpa, network, region, dropdown, value)
-                base_key = (comp, tpa, network, region, dropdown)
+                # Include Broker_ID in keys for broker-specific comparison
+                full_key = (broker_id_val, comp, tpa, network, region, dropdown, value)
+                base_key = (broker_id_val, comp, tpa, network, region, dropdown)
                 
                 original_full_keys.add(full_key)
                 original_by_base_key.setdefault(base_key, []).append({
-                    'broker_id': broker_id,
+                    'broker_id': broker_id_val,
                     'value': value
                 })
             
@@ -794,11 +833,11 @@ class StagingUploader:
                             report.modified_records.append(ChangeRecord(
                                 change_type='UPDATE',
                                 broker_id=staging_item['broker_id'],
-                                company=base_key[0],
-                                tpa=base_key[1],
-                                network=base_key[2],
-                                region=base_key[3],
-                                dropdown_name=base_key[4],
+                                company=base_key[1],
+                                tpa=base_key[2],
+                                network=base_key[3],
+                                region=base_key[4],
+                                dropdown_name=base_key[5],
                                 old_value=orig_value,
                                 new_value=staging_value,
                                 difference_type=diff_type
@@ -815,11 +854,11 @@ class StagingUploader:
                         report.new_records.append(ChangeRecord(
                             change_type='INSERT',
                             broker_id=staging_item['broker_id'],
-                            company=base_key[0],
-                            tpa=base_key[1],
-                            network=base_key[2],
-                            region=base_key[3],
-                            dropdown_name=base_key[4],
+                            company=base_key[1],
+                            tpa=base_key[2],
+                            network=base_key[3],
+                            region=base_key[4],
+                            dropdown_name=base_key[5],
                             new_value=staging_value,
                             difference_type="NEW_VALUE"
                         ))
@@ -859,11 +898,11 @@ class StagingUploader:
                     report.deleted_records.append(ChangeRecord(
                         change_type='DELETE',
                         broker_id=orig_item['broker_id'],
-                        company=base_key[0],
-                        tpa=base_key[1],
-                        network=base_key[2],
-                        region=base_key[3],
-                        dropdown_name=base_key[4],
+                        company=base_key[1],
+                        tpa=base_key[2],
+                        network=base_key[3],
+                        region=base_key[4],
+                        dropdown_name=base_key[5],
                         old_value=orig_value,
                         difference_type="VALUE_CHANGE"
                     ))
@@ -1118,11 +1157,11 @@ class StagingUploader:
             for rec in report.deleted_records:
                 delete_query = f"""
                     DELETE FROM {ORIGINAL_TABLE}
-                    WHERE Company = %s AND TPA = %s AND Network = %s 
+                    WHERE Broker_ID = %s AND Company = %s AND TPA = %s AND Network = %s 
                           AND Region = %s AND Dropdown_Name = %s AND Selection_Value = %s
                 """
                 affected = self._execute(delete_query, (
-                    rec.company, rec.tpa, rec.network, 
+                    rec.broker_id, rec.company, rec.tpa, rec.network, 
                     rec.region, rec.dropdown_name, rec.old_value
                 ))
                 deleted += affected if affected else 0
@@ -1134,11 +1173,11 @@ class StagingUploader:
                 # Delete old value
                 delete_query = f"""
                     DELETE FROM {ORIGINAL_TABLE}
-                    WHERE Company = %s AND TPA = %s AND Network = %s 
+                    WHERE Broker_ID = %s AND Company = %s AND TPA = %s AND Network = %s 
                           AND Region = %s AND Dropdown_Name = %s AND Selection_Value = %s
                 """
                 self._execute(delete_query, (
-                    rec.company, rec.tpa, rec.network,
+                    rec.broker_id, rec.company, rec.tpa, rec.network,
                     rec.region, rec.dropdown_name, rec.old_value
                 ))
                 
@@ -1269,6 +1308,228 @@ class StagingUploader:
         return old_count
     
     # =========================================================================
+    # MULTI-BROKER SUPPORT METHODS
+    # =========================================================================
+    
+    def upload_company_data(
+        self,
+        file_path: str,
+        run_id: str,
+        company_name: str,
+        broker_id: int
+    ) -> Dict:
+        """
+        Upload extracted company data from file for a specific broker.
+        Entry point for multi-broker upload system.
+        
+        Args:
+            file_path: Path to extracted .txt file
+            run_id: Unique run identifier (timestamp)
+            company_name: Portal/company name
+            broker_id: Broker ID to associate with this data
+            
+        Returns:
+            Dict with upload results
+        """
+        import json
+        from .staging_config import standardize_company_name
+        from .staging_mapping_service import load_dropdown_mappings, apply_dropdown_mapping
+        
+        print(f"\n   📋 Parsing file: {os.path.basename(file_path)}")
+        
+        # Parse JSON records from file
+        records = []
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    # Add broker ID to every record
+                    record['Broker_ID'] = broker_id
+                    records.append(record)
+                except json.JSONDecodeError as e:
+                    print(f"      ⚠️ Skipping invalid JSON at line {line_num}: {e}")
+        
+        if not records:
+            print(f"      ⚠️ No valid records found in file")
+            return {"success": False, "error": "No valid records"}
+        
+        print(f"      ✓ Parsed {len(records)} records")
+        
+        # Standardize company name
+        standardized_company = standardize_company_name(company_name)
+        for record in records:
+            record["Company"] = standardized_company
+        
+        # Set run ID for this upload
+        self.run_id = run_id
+        
+        # Connect to database for mapping lookup
+        if not self._connect():
+            raise ConnectionError("Failed to connect to database")
+        
+        try:
+            # Load and apply dropdown mappings
+            print(f"      🔄 Applying dropdown name mappings...")
+            from .staging_mapping_service import load_dropdown_mappings, apply_dropdown_mapping
+            from .staging_config import get_mapping_column_name
+            
+            # Get the correct column name for mapping table lookup
+            mapping_column = get_mapping_column_name(company_name)
+            
+            mappings = load_dropdown_mappings(self.db, mapping_column)
+            if mappings:
+                # apply_dropdown_mapping returns 5 values!
+                records, mapped, unmapped, applied_mappings, unmapped_names = apply_dropdown_mapping(
+                    records, mappings, only_mapped=False
+                )
+                print(f"         Mapped: {mapped}, Unmapped: {unmapped}")
+            else:
+                print(f"         No mappings found for {company_name}")
+            
+            # Get unique dropdown names
+            dropdown_names = set(r.get("Dropdown_Name", "") for r in records if r.get("Dropdown_Name"))
+            
+            # Prepare for process_upload
+            companies = [standardized_company]
+            dropdown_names_by_company = {standardized_company: dropdown_names}
+            
+            # Disconnect before calling process_upload (it will create its own connection)
+            self._disconnect()
+            
+            # Call main upload process
+            print(f"      📤 Uploading to staging table for Broker {broker_id}...")
+            success, report, message = self.process_upload(
+                records=records,
+                companies=companies,
+                dropdown_names_by_company=dropdown_names_by_company
+            )
+            
+            return {
+                "success": success,
+                "message": message,
+                "report": report,
+                "records_processed": len(records),
+                "changes": report.total_changes if report else 0
+            }
+            
+        except Exception as e:
+            # If error occurs before process_upload, disconnect here
+            self._disconnect()
+            raise
+    
+    def apply_staging_changes_for_broker(
+        self,
+        broker_id: int,
+        company_name: str,
+        run_id: str
+    ) -> Dict:
+        """
+        Apply staging changes to main table for a specific broker.
+        This is called by multi_broker_upload.py after replicating staging records.
+        
+        Args:
+            broker_id: Broker ID to process
+            company_name: Company/portal name
+            run_id: Extraction run ID
+            
+        Returns:
+            Dict with statistics (inserted, updated, deleted counts)
+        """
+        if not self._connect():
+            raise ConnectionError("Failed to connect to database")
+        
+        try:
+            print(f"      📊 Comparing staging vs main for Broker {broker_id}...")
+            
+            # Fetch staging records for this broker
+            staging_query = f"""
+                SELECT Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+                FROM {STAGING_TABLE}
+                WHERE Broker_ID = %s AND Company = %s AND Run_ID = %s
+            """
+            staging_records = self._fetch_all(staging_query, (broker_id, company_name, run_id))
+            
+            # Fetch main table records for this broker
+            main_query = f"""
+                SELECT CTN_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+                FROM {ORIGINAL_TABLE}
+                WHERE Broker_ID = %s AND Company = %s
+            """
+            main_records = self._fetch_all(main_query, (broker_id, company_name))
+            
+            # Build lookup sets
+            staging_keys = set()
+            for row in staging_records:
+                key = (
+                    row['Company'], row['TPA'], row['Network'],
+                    row['Region'], row['Dropdown_Name'], row['Selection_Value']
+                )
+                staging_keys.add(key)
+            
+            main_keys_with_ids = {}
+            for row in main_records:
+                key = (
+                    row['Company'], row['TPA'], row['Network'],
+                    row['Region'], row['Dropdown_Name'], row['Selection_Value']
+                )
+                main_keys_with_ids[key] = row['CTN_ID']
+            
+            # Identify changes
+            new_keys = staging_keys - set(main_keys_with_ids.keys())
+            deleted_keys = set(main_keys_with_ids.keys()) - staging_keys
+            
+            inserted = 0
+            updated = 0
+            deleted = 0
+            
+            # Insert new records
+            if new_keys:
+                insert_query = f"""
+                    INSERT INTO {ORIGINAL_TABLE}
+                    (Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                insert_params = [
+                    (broker_id, key[0], key[1], key[2], key[3], key[4], key[5])
+                    for key in new_keys
+                ]
+                self.db.cursor.executemany(insert_query, insert_params)
+                inserted = len(insert_params)
+                print(f"      ✅ Inserted {inserted} new records")
+            
+            # Delete old records
+            if deleted_keys:
+                delete_ids = [main_keys_with_ids[key] for key in deleted_keys]
+                placeholders = ','.join(['%s'] * len(delete_ids))
+                delete_query = f"DELETE FROM {ORIGINAL_TABLE} WHERE CTN_ID IN ({placeholders})"
+                self.db.cursor.execute(delete_query, delete_ids)
+                deleted = len(delete_ids)
+                print(f"      ✅ Deleted {deleted} old records")
+            
+            # Commit changes
+            self.db.connection.commit()
+            
+            print(f"      ✅ Applied changes: {inserted} new, {updated} updated, {deleted} deleted")
+            
+            return {
+                "inserted": inserted,
+                "updated": updated,
+                "deleted": deleted,
+                "total": inserted + updated + deleted
+            }
+            
+        except Exception as e:
+            print(f"      ❌ Failed to apply changes: {str(e)}")
+            if self.db and self.db.connection:
+                self.db.connection.rollback()
+            raise
+        finally:
+            self._disconnect()
+    
+    # =========================================================================
     # MAIN PROCESS METHOD
     # =========================================================================
     
@@ -1374,6 +1635,22 @@ class StagingUploader:
             # Step 3: Upload to staging (new extraction data)
             staging_inserted, staging_cleared = self.upload_to_staging(records)
             
+            # Detect broker mode: single broker or batch (multiple brokers)
+            unique_broker_ids = set(r.get('Broker_ID') for r in records if r.get('Broker_ID') is not None)
+            
+            if len(unique_broker_ids) == 1:
+                # Single broker mode
+                broker_id = next(iter(unique_broker_ids))
+                print(f"   ℹ️  Single-broker mode: Broker {broker_id}")
+            elif len(unique_broker_ids) > 1:
+                # Batch mode - multiple brokers
+                broker_id = None
+                print(f"   ℹ️  Batch mode: {len(unique_broker_ids)} brokers ({', '.join(map(str, sorted(unique_broker_ids)))})")
+            else:
+                # Fallback: no broker ID found
+                broker_id = 3
+                print(f"   ⚠️  No Broker_ID found in records, defaulting to Broker {broker_id}")
+            
             # Step 4: Compare tables (pass counts so they're set during creation)
             report = self.compare_tables(
                 companies, 
@@ -1381,7 +1658,8 @@ class StagingUploader:
                 backup_count=backup_count,
                 old_backups_removed=old_backups_removed,
                 staging_inserted=staging_inserted,
-                staging_cleared=staging_cleared
+                staging_cleared=staging_cleared,
+                broker_id=broker_id  # None = batch mode, int = single broker mode
             )
             
             # Print change report

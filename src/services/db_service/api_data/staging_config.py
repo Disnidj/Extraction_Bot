@@ -94,6 +94,22 @@ COMPANY_NAME_MAPPING = {
 }
 
 
+# Maps portal technical names to Medical_CTN_Portal_Field_Mapping column names
+# This is used when looking up dropdown mappings
+PORTAL_TO_MAPPING_COLUMN = {
+    "ADNIC": "ADNIC",
+    "Takaful": "TAKAFUL EMARAT",
+    "QATAR": "QATAR INSURANCE CO",
+    "MaxHealth": "MaxHealth",
+    "Sukoon": "SUKOON INSURANCE",
+    "Orient Aura": "Orient Aura",
+    "NLGI Aura": "Liva Globalcare",  # Portal technical name → Database column name
+    "AL SAGR": "AL SAGR",
+    "QIC HealthX Exclusive": "QIC HealthX Exclusive",
+    # Add other portals as needed
+}
+
+
 def standardize_company_name(company: str) -> str:
     """
     Standardize company name to match database naming convention.
@@ -105,3 +121,20 @@ def standardize_company_name(company: str) -> str:
         Standardized company name for database
     """
     return COMPANY_NAME_MAPPING.get(company, company)
+
+
+def get_mapping_column_name(portal_name: str) -> str:
+    """
+    Get the mapping table column name for a portal.
+    
+    The Medical_CTN_Portal_Field_Mapping table has columns named after 
+    company display names (e.g., "Liva Globalcare", "QATAR INSURANCE CO").
+    This function maps portal technical names to those column names.
+    
+    Args:
+        portal_name: Portal technical name (e.g., "NLGI Aura", "QATAR")
+        
+    Returns:
+        Column name in mapping table (e.g., "Liva Globalcare", "QATAR INSURANCE CO")
+    """
+    return PORTAL_TO_MAPPING_COLUMN.get(portal_name, portal_name)

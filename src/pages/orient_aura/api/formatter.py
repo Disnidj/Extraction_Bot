@@ -20,8 +20,8 @@ from src.utils.logger import orient_aura_logger
 from .mapping import PORTAL_REGION
 
 
-# Default Broker ID - can be configured
-DEFAULT_BROKER_ID = 3
+# Default Broker ID - placeholder (will be overwritten during upload)
+DEFAULT_BROKER_ID = 0
 
 
 class OrientAuraFormatter:

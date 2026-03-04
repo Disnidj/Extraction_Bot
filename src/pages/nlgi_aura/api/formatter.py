@@ -21,8 +21,8 @@ from src.utils.logger import nlgi_aura_logger
 from .mapping import NLGI_MAPPING, PORTAL_REGION
 
 
-# Default Broker ID
-DEFAULT_BROKER_ID = 3
+# Default Broker ID - placeholder (will be overwritten during upload)
+DEFAULT_BROKER_ID = 0
 
 # Get group name for TPA prefix
 GROUP_NAME = NLGI_MAPPING["group"]["group_name"]

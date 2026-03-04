@@ -24,8 +24,8 @@ from src.utils.logger import adnic_logger
 # Portal name for this formatter
 PORTAL_NAME = "adnic"
 
-# Default Broker ID - can be configured
-DEFAULT_BROKER_ID = 3
+# Default Broker ID - placeholder (will be overwritten during upload)
+DEFAULT_BROKER_ID = 0
 
 # ADNIC dropdown name mappings - moved to database table Medical_CTN_Portal_Field_Mapping
 # This allows centralized mapping management in the database
