@@ -89,6 +89,7 @@ COMPANY_NAME_MAPPING = {
     "MaxHealth": "MaxHealth",
     "Orient Aura": "Orient Aura",
     "NLGI Aura": "Liva Globalcare",
+    "AL SAGR INSURANCE COMPANY": "Al Sagr",
     # Add other portals as needed
 }
 

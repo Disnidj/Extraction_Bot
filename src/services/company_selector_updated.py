@@ -44,7 +44,6 @@ COMPANY_TO_FUNCTION_MAPPING = {
     "ORIENT INSURANCE PJSC": "Orient",
     "Al Ittihad Al Watani": "Alittihad_Alwatani",
     "ADNIC": "ADNIC",
-    "AL SAGR INSURANCE COMPANY": "ALSAGR",
     "GIG Insurance": "GIG",
     "DUBAI INSURANCE CO": "Dubaiinsurance",
     "SUKOON INSURANCE": "Sukoon",
@@ -59,7 +58,9 @@ COMPANY_TO_FUNCTION_MAPPING = {
     "MaxHealth": "MaxHealth",
     "Orient Aura": "Orient Aura",
     "Liva Globalcare": "NLGI Aura",
-    "QIC HealthX Exclusive": "QIC HealthX Exclusive"
+    "QIC HealthX Exclusive": "QIC HealthX Exclusive",
+    "AL SAGR INSURANCE COMPANY": "AL SAGR"
+
 }
 
 
@@ -76,6 +77,7 @@ API_ENABLED_COMPANIES = [
     "SUKOON INSURANCE",         # #9
     "Orient Aura",              # #19
     "Liva Globalcare",          # #20 (NLGI Aura)
+    "AL SAGR INSURANCE COMPANY", # #6
     "QIC HealthX Exclusive"     # #21
 ]
 

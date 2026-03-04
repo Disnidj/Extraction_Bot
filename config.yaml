@@ -42,10 +42,13 @@ paths:
   db_update: "db_update"
 
 alsagr:
-  username: "INTERACTIVE"
-  password: "IIB@alsagr2025"
+  username: "LIFECAREINC"
+  password: "Lifecare@2026"
   generated_census_dir: "attachments"
   templates_dir: "company_data/alsagr/templates"
+  # For API extraction - use any existing quotation ID to extract benefit structure
+  # The benefit plans/values are the same for all quotations with same TPA
+  default_quotation_id: null  # Set to a valid quotation ID (e.g., 530746) or leave null for auto-discovery
 
 iq2health:
   generated_census_dir: "company_data/iq/generated_census"
@@ -267,7 +270,7 @@ captcha:
   api_key: "7da6201c72dca5a9798203eec1d6bb66"
 
 modes:
-  headless: True
+  headless: false
   parallel: false
 
 sleep:

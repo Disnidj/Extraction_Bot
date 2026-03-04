@@ -46,6 +46,7 @@ ALSAGR_USERNAME = config['alsagr']['username']
 ALSAGR_PASSWORD = config['alsagr']['password']
 ALSAGR_GENERATED_CENSUS_DIR = config['alsagr']['generated_census_dir']
 ALSAGR_TEMPLATES_DIR = config['alsagr']['templates_dir']
+ALSAGR_DEFAULT_QUOTATION_ID = config['alsagr'].get('default_quotation_id', None)
  
 ORIENT_EMIAL = config['orient']['email']
 ORIENT_PASSWORD = config['orient']['password']
