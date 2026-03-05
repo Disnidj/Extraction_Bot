@@ -765,8 +765,8 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
         selected_broker_ids=broker_ids
     )
     
-    # Upload each successfully extracted portal
-    upload_results = []
+    # Collect all portal files for batch upload
+    portal_files = []
     
     for portal in matching_portals:
         portal_name = portal['name']
@@ -799,41 +799,81 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
         
         extracted_file = extracted_files[0]  # Use first match
         
-        # Upload this portal's data
-        result = multi_uploader.upload_portal_data(
-            portal_name=portal_name,
-            extracted_file_path=extracted_file
-        )
+        # Add to batch list
+        portal_files.append({
+            'portal': portal_name,
+            'file': extracted_file
+        })
+    
+    # BATCH UPLOAD: Process all portals at once
+    upload_results = []
+    
+    if portal_files:
+        print(f"\n{'='*70}")
+        print(f"🚀 BATCH UPLOAD MODE ACTIVATED")
+        print(f"{'='*70}")
+        print(f"   Uploading {len(portal_files)} portal(s) in SINGLE batch operation")
+        print(f"   Benefits: 1 backup + 1 comparison + 1 apply = Much faster!")
+        print(f"{'='*70}")
         
+        # Single batch upload call for ALL portals
+        result = multi_uploader.upload_all_portals_batch(portal_files)
         upload_results.append(result)
+    else:
+        print(f"\n⚠️  No portals to upload")
     
     db_upload_end = datetime.now()
     db_upload_duration = db_upload_end - db_upload_start
     
-    # Calculate summary
+    # Calculate summary from batch result
     successful_uploads = sum(1 for r in upload_results if r.get('status') == 'success')
     failed_uploads = len(upload_results) - successful_uploads
     
+    # Get total portals from batch result
+    total_portals = 0
+    if upload_results:
+        batch_result = upload_results[0]
+        if batch_result.get('status') == 'success':
+            total_portals = len(batch_result.get('portals', []))
+    
     # Display summary
     print(f"\n{'='*70}")
-    print(f"✅ Multi-Broker Upload Complete")
+    print(f"✅ Multi-Broker Batch Upload Complete")
     print(f"{'='*70}")
-    print(f"   • Portals processed: {len(upload_results)}")
+    print(f"   • Portals uploaded: {total_portals}")
+    print(f"   • Batch operations: {len(upload_results)}")
     print(f"   • Successful: {successful_uploads}")
     print(f"   • Failed: {failed_uploads}")
     print(f"   • Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
     
+    # Show portal breakdown from batch result
+    if upload_results and upload_results[0].get('portal_details'):
+        print(f"\n📊 Portal Breakdown:")
+        for portal_name, info in upload_results[0]['portal_details'].items():
+            broker_names = ', '.join([f"Broker {bid}" for bid in info['brokers']])
+            print(f"   • {portal_name}: {info['records']} records ({broker_names})")
+    
     # Show broker breakdown
-    print(f"\n📊 Breakdown by Broker:")
-    for broker_id in broker_ids:
-        portals_for_broker = [r['portal'] for r in upload_results if r.get('status') == 'success' and broker_id in r.get('brokers', [])]
-        print(f"   • Broker {broker_id} ({get_broker_name(broker_id)}): {len(portals_for_broker)} portals")
+    print(f"\n📊 Broker Breakdown:")
+    if upload_results and upload_results[0].get('portal_details'):
+        # Build broker to portals mapping
+        broker_to_portals = {}
+        for portal_name, info in upload_results[0]['portal_details'].items():
+            for broker_id in info['brokers']:
+                if broker_id not in broker_to_portals:
+                    broker_to_portals[broker_id] = []
+                broker_to_portals[broker_id].append(portal_name)
+        
+        for broker_id in broker_ids:
+            portals = broker_to_portals.get(broker_id, [])
+            print(f"   • Broker {broker_id} ({get_broker_name(broker_id)}): {len(portals)} portals")
     
     # Log to main execution logger
     main_execution_logger.info(f"\n{'='*70}")
-    main_execution_logger.info(f"📤 DATABASE UPLOAD SUMMARY (Multi-Broker)")
+    main_execution_logger.info(f"📤 DATABASE UPLOAD SUMMARY (Multi-Broker BATCH MODE)")
     main_execution_logger.info(f"{'='*70}")
-    main_execution_logger.info(f"   Portals processed: {len(upload_results)}")
+    main_execution_logger.info(f"   Portals uploaded: {total_portals}")
+    main_execution_logger.info(f"   Batch operations: {len(upload_results)}")
     main_execution_logger.info(f"   Successful: {successful_uploads}")
     main_execution_logger.info(f"   Failed: {failed_uploads}")
     main_execution_logger.info(f"   Duration: {db_upload_duration.total_seconds():.2f}s ({int(db_upload_duration.total_seconds() // 60)}m {int(db_upload_duration.total_seconds() % 60)}s)")
@@ -841,9 +881,17 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
     main_execution_logger.info(f"   Brokers: {', '.join([f'Broker {bid}' for bid in broker_ids])}")
     
     # Log broker breakdown
-    for broker_id in broker_ids:
-        portals_for_broker = [r['portal'] for r in upload_results if r.get('status') == 'success' and broker_id in r.get('brokers', [])]
-        main_execution_logger.info(f"      • Broker {broker_id} ({get_broker_name(broker_id)}): {len(portals_for_broker)} portals")
+    if upload_results and upload_results[0].get('portal_details'):
+        broker_to_portals = {}
+        for portal_name, info in upload_results[0]['portal_details'].items():
+            for broker_id in info['brokers']:
+                if broker_id not in broker_to_portals:
+                    broker_to_portals[broker_id] = []
+                broker_to_portals[broker_id].append(portal_name)
+        
+        for broker_id in broker_ids:
+            portals = broker_to_portals.get(broker_id, [])
+            main_execution_logger.info(f"      • Broker {broker_id} ({get_broker_name(broker_id)}): {len(portals)} portals")
     
     # Log any failed uploads
     failed_portals = [r for r in upload_results if r.get('status') != 'success']
@@ -855,7 +903,31 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
     main_execution_logger.info(f"{'='*70}\n")
     
     success = failed_uploads == 0
-    rows_changed = len(upload_results)  # For compatibility with existing code
+    
+    # Extract correct data from batch upload result for PDF report
+    change_report = None
+    rows_uploaded = 0
+    if upload_results and upload_results[0].get('status') == 'success':
+        change_report = upload_results[0].get('report')
+        rows_uploaded = upload_results[0].get('total_records', 0)
+    else:
+        rows_uploaded = len(upload_results)  # Fallback for compatibility
+    
+    # Build broker details for reports (PDF + Email)
+    broker_details = None
+    if upload_results and upload_results[0].get('portal_details'):
+        broker_to_portals = {}
+        for portal_name, info in upload_results[0]['portal_details'].items():
+            for broker_id in info['brokers']:
+                if broker_id not in broker_to_portals:
+                    broker_to_portals[broker_id] = []
+                broker_to_portals[broker_id].append(portal_name)
+        
+        broker_details = {
+            'broker_ids': broker_ids,
+            'broker_to_portals': broker_to_portals,
+            'portal_details': upload_results[0]['portal_details']
+        }
 
     # ============================================================
     # FINAL SUMMARY: Complete Process Duration
@@ -898,7 +970,7 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
             portal_timings=portal_timings,
             portal_results=portal_results,
             db_upload_success=success,
-            db_rows_inserted=rows_changed,  # Total uploads count from multi-broker uploader
+            db_rows_inserted=rows_uploaded,  # Total records uploaded (26463, not 1)
             db_upload_duration=db_upload_duration.total_seconds(),
             db_upload_start=db_upload_start,
             db_upload_end=db_upload_end,
@@ -907,7 +979,8 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
             portals_processed=[p['name'] for p in matching_portals],
             deletion_details=None,  # Not available in multi-broker mode
             mapping_details=None,  # Not available in multi-broker mode
-            change_report=None  # Not available in multi-broker mode
+            change_report=change_report,  # Pass the ChangeReport object with all details
+            broker_details=broker_details  # Pass broker-to-portals mapping
         )
         print(f"✅ PDF Report generated: {pdf_path}")
         main_execution_logger.info(f"\n{'='*70}")
@@ -947,7 +1020,7 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
                     portal_results=portal_results,
                     portal_timings=portal_timings,
                     db_upload_success=success,
-                    db_rows_inserted=rows_changed,  # Total uploads from multi-broker uploader
+                    db_rows_inserted=rows_uploaded,  # Correct count: 26463, not 1!
                     db_upload_duration=db_upload_duration.total_seconds(),
                     total_duration=total_seconds,
                     portals_processed=[p['name'] for p in matching_portals],
@@ -955,7 +1028,8 @@ async def run_api_extraction_mode(playwright, selected_companies=None, skip_conf
                     recipients_to=NOTIFICATION_RECIPIENTS_TO,
                     recipients_cc=NOTIFICATION_RECIPIENTS_CC,
                     logger=main_execution_logger,
-                    change_report=None,  # Not available in multi-broker mode
+                    change_report=change_report,  # Pass ChangeReport with full staging details!
+                    broker_details=broker_details  # Pass broker-to-portals mapping
                 )
                 
                 if email_sent:

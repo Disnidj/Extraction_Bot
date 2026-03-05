@@ -239,6 +239,128 @@ class MultiBrokerUploader:
         
         return ordered_brokers
     
+    def upload_all_portals_batch(self, portal_files: List[Dict]) -> Dict:
+        """
+        Upload ALL portals in a single batch operation for maximum efficiency.
+        This processes all portals together: single backup, single comparison, single apply.
+        
+        Args:
+            portal_files: List of dicts with portal info:
+                [
+                    {'portal': 'ADNIC', 'file': 'path/to/adnic.txt'},
+                    {'portal': 'Sukoon', 'file': 'path/to/sukoon.txt'}
+                ]
+        
+        Returns:
+            Dict with combined upload results for all portals
+        """
+        if not portal_files:
+            return {"status": "skipped", "reason": "no_portals"}
+        
+        print(f"\n{'='*70}")
+        print(f"📤 BATCH UPLOAD - ALL PORTALS (Multi-Broker)")
+        print(f"{'='*70}")
+        print(f"Portals: {len(portal_files)}")
+        print(f"Brokers: {', '.join([f'Broker {bid} ({get_broker_name(bid)})' for bid in self.selected_broker_ids])}")
+        
+        try:
+            # Step 1: Parse and combine ALL portal data
+            all_records = []
+            all_dropdown_names = {}
+            portal_broker_counts = {}
+            
+            for item in portal_files:
+                portal_name = item['portal']
+                file_path = item['file']
+                
+                print(f"\n   📋 Parsing {portal_name}...")
+                
+                # Get brokers for this portal
+                brokers_using_portal = self._get_brokers_for_portal(portal_name)
+                
+                if not brokers_using_portal:
+                    print(f"      ⚠️  No brokers configured for {portal_name}, skipping...")
+                    continue
+                
+                # Parse and prepare records for all brokers
+                records = self._parse_and_prepare_multi_broker_records(
+                    file_path, 
+                    portal_name,
+                    brokers_using_portal
+                )
+                
+                # Apply mappings
+                records = self._apply_mappings_to_records(records, portal_name)
+                
+                # Add to combined list
+                all_records.extend(records)
+                
+                # Collect dropdown names for this portal
+                portal_dropdowns = set(r.get("Dropdown_Name") for r in records if r.get("Dropdown_Name"))
+                all_dropdown_names[portal_name] = portal_dropdowns
+                
+                # Track broker counts for summary
+                portal_broker_counts[portal_name] = {
+                    'brokers': brokers_using_portal,
+                    'records': len(records)
+                }
+                
+                print(f"      ✅ {portal_name}: {len(records)} records for {len(brokers_using_portal)} broker(s)")
+            
+            if not all_records:
+                print(f"\n   ⚠️  No records to upload")
+                return {"status": "skipped", "reason": "no_records"}
+            
+            # Display summary
+            print(f"\n   {'─'*70}")
+            print(f"   📊 BATCH SUMMARY:")
+            print(f"      • Total portals: {len(all_dropdown_names)}")
+            print(f"      • Total records: {len(all_records)}")
+            print(f"      • Total brokers: {len(self.selected_broker_ids)}")
+            
+            for portal_name, info in portal_broker_counts.items():
+                broker_names = ', '.join([f"Broker {bid}" for bid in info['brokers']])
+                print(f"      • {portal_name}: {info['records']} records ({broker_names})")
+            print(f"   {'─'*70}")
+            
+            # Step 2: Single batch upload to staging for ALL portals
+            print(f"\n   📤 Uploading ALL portals to staging in single batch operation...")
+            print(f"      ✅ Single backup + Single comparison + Single apply = Maximum efficiency!")
+            
+            success, report, message = self.uploader.process_upload(
+                records=all_records,
+                companies=list(all_dropdown_names.keys()),
+                dropdown_names_by_company=all_dropdown_names
+            )
+            
+            if success:
+                print(f"\n   ✅ Batch upload completed successfully for ALL {len(portal_files)} portals!")
+                return {
+                    "status": "success",
+                    "portals": [item['portal'] for item in portal_files],
+                    "total_records": len(all_records),
+                    "total_changes": report.total_changes if report else 0,
+                    "report": report,
+                    "portal_details": portal_broker_counts
+                }
+            else:
+                print(f"\n   ❌ Batch upload failed: {message}")
+                return {
+                    "status": "failed",
+                    "portals": [item['portal'] for item in portal_files],
+                    "error": message
+                }
+                
+        except Exception as e:
+            print(f"\n   ❌ Batch upload error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "portals": [item['portal'] for item in portal_files],
+                "error": str(e)
+            }
+    
     def generate_upload_summary(self) -> str:
         """
         Generate summary of multi-broker upload.

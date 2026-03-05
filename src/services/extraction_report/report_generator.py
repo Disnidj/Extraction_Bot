@@ -125,7 +125,8 @@ class ExtractionReportGenerator:
         portals_processed: List[str],
         deletion_details: Dict = None,
         mapping_details: Dict = None,
-        change_report = None
+        change_report = None,
+        broker_details: Dict = None
     ) -> str:
         """
         Generate the extraction report PDF.
@@ -147,6 +148,7 @@ class ExtractionReportGenerator:
             deletion_details: Dict with deletion info per portal {company: {rows_deleted, dropdown_names}}
             mapping_details: Dict with mapping info {applied_mappings: {company: {portal_name: db_name}}, unmapped_names: {company: [names]}}
             change_report: ChangeReport object with comparison results (new/modified/deleted records)
+            broker_details: Dict with broker breakdown {broker_ids: [], broker_to_portals: {}, portal_details: {}}
             
         Returns:
             str: Path to generated PDF report
@@ -744,6 +746,59 @@ class ExtractionReportGenerator:
             ))
         story.append(Spacer(1, 6))
         
+        # === BROKER BREAKDOWN (Multi-Broker Mode) ===
+        if broker_details:
+            from src.config.broker_config import get_broker_name
+            
+            broker_ids = broker_details.get('broker_ids', [])
+            broker_to_portals = broker_details.get('broker_to_portals', {})
+            
+            if broker_ids and broker_to_portals:
+                story.append(self._create_section_header("🏢 Multi-Broker Breakdown"))
+                
+                # Info text
+                info_text = f"This extraction run processed data for <b>{len(broker_ids)} broker(s)</b>. Each portal's data was uploaded for all relevant brokers in a single batch operation."
+                story.append(Paragraph(info_text, ParagraphStyle(
+                    name='BrokerInfoText',
+                    parent=self.styles['Normal'],
+                    fontSize=8,
+                    spaceAfter=6,
+                    textColor=colors.HexColor('#4a5568')
+                )))
+                
+                # Broker breakdown table
+                broker_table_data = [['Broker', 'Portal Count', 'Portal Names']]
+                
+                for broker_id in broker_ids:
+                    portals = broker_to_portals.get(broker_id, [])
+                    broker_name = get_broker_name(broker_id)
+                    portal_list = ', '.join(portals) if portals else 'None'
+                    
+                    broker_table_data.append([
+                        f"Broker {broker_id}\n{broker_name}",
+                        str(len(portals)),
+                        portal_list
+                    ])
+                
+                broker_table = Table(broker_table_data, colWidths=[120, 80, 260])
+                broker_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                    ('TOPPADDING', (0, 1), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e0')),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')]),
+                ]))
+                
+                story.append(broker_table)
+                story.append(Spacer(1, 10))
+        
         # === DATABASE OPERATIONS SUMMARY ===
         story.append(self._create_section_header("📊 Database Operations Summary"))
         
@@ -1336,7 +1391,8 @@ def generate_extraction_report(
     portals_processed: List[str],
     deletion_details: Dict = None,
     mapping_details: Dict = None,
-    change_report = None
+    change_report = None,
+    broker_details: Dict = None
 ) -> str:
     """
     Convenience function to generate extraction report.
@@ -1364,5 +1420,6 @@ def generate_extraction_report(
         portals_processed=portals_processed,
         deletion_details=deletion_details,
         mapping_details=mapping_details,
-        change_report=change_report
+        change_report=change_report,
+        broker_details=broker_details
     )

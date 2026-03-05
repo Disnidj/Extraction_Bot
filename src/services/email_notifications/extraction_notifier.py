@@ -285,6 +285,75 @@ def _build_change_report_html(change_report) -> str:
     '''
 
 
+def _build_broker_breakdown_html(broker_details: Dict) -> str:
+    """
+    Build HTML for broker breakdown section.
+    Shows which portals are assigned to which brokers.
+    
+    Args:
+        broker_details: Dict with broker_ids, broker_to_portals, portal_details
+        
+    Returns:
+        str: HTML string for broker breakdown section
+    """
+    if not broker_details:
+        return ""
+    
+    from src.config.broker_config import get_broker_name
+    
+    broker_ids = broker_details.get('broker_ids', [])
+    broker_to_portals = broker_details.get('broker_to_portals', {})
+    
+    if not broker_ids or not broker_to_portals:
+        return ""
+    
+    # Build broker rows
+    broker_rows = ""
+    for broker_id in broker_ids:
+        portals = broker_to_portals.get(broker_id, [])
+        broker_name = get_broker_name(broker_id)
+        portal_list = ', '.join(portals) if portals else 'None'
+        
+        broker_rows += f"""
+        <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #333333; font-size: 12px; font-weight: 600;">
+                Broker {broker_id} - {broker_name}
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; color: #0066cc; font-weight: 600; font-size: 12px;">
+                {len(portals)}
+            </td>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #555555; font-size: 11px;">
+                {portal_list}
+            </td>
+        </tr>
+        """
+    
+    return f'''
+    <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: #0066cc; margin-bottom: 10px; font-size: 15px; border-bottom: 2px solid #0066cc; padding-bottom: 5px;">
+            🏢 Multi-Broker Breakdown
+        </div>
+        <div style="background-color: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 8px;">
+            <p style="margin: 0; color: #495057; font-size: 11px; font-style: italic;">
+                This extraction run processed data for {len(broker_ids)} broker(s). Each portal's data was uploaded for all relevant brokers.
+            </p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 5px;">
+            <thead>
+                <tr>
+                    <th style="background-color: #4a5568; color: white; padding: 8px; text-align: left; font-size: 12px;">Broker</th>
+                    <th style="background-color: #4a5568; color: white; padding: 8px; text-align: center; width: 80px; font-size: 12px;">Portals</th>
+                    <th style="background-color: #4a5568; color: white; padding: 8px; text-align: left; font-size: 12px;">Portal Names</th>
+                </tr>
+            </thead>
+            <tbody>
+                {broker_rows}
+            </tbody>
+        </table>
+    </div>
+    '''
+
+
 def _build_database_operations_html(change_report) -> str:
     """
     Build HTML for detailed database operations section.
@@ -359,6 +428,7 @@ def build_extraction_summary_email(
     portals_processed: List[str],
     pdf_report_path: str = None,
     change_report = None,
+    broker_details: Dict = None,
 ) -> str:
     """Build professional HTML email body for extraction completion notification.
     
@@ -537,6 +607,9 @@ def build_extraction_summary_email(
                     </table>
                 </div>
                 
+                <!-- Broker Breakdown (Multi-Broker Mode) -->
+                {_build_broker_breakdown_html(broker_details) if broker_details else ''}
+                
                 <!-- Database Operations Summary -->
                 {_build_database_operations_html(change_report) if change_report else ''}
                 
@@ -594,8 +667,7 @@ async def send_extraction_success_notification(
     recipients_to: List[str] = None,
     recipients_cc: List[str] = None,
     logger: Optional[logging.Logger] = None,
-    change_report = None,
-) -> bool:
+    change_report = None,    broker_details: Dict = None,) -> bool:
     """Send extraction completion notification email with PDF report.
     
     Args:
@@ -640,6 +712,7 @@ async def send_extraction_success_notification(
         portals_processed=portals_processed,
         pdf_report_path=pdf_report_path,
         change_report=change_report,
+        broker_details=broker_details,
     )
     
     # Prepare attachments
