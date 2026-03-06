@@ -180,7 +180,8 @@ class AlSagrAPIClient:
         endpoint = ENDPOINTS["benefit_structure"]
         params = {"quotationId": quotation_id}
         
-        data = await self._get(endpoint, params)
+        # Use POST instead of GET (API returns 405 for GET)
+        data = await self._post(endpoint, params)
         
         if data:
             # Log structure summary
@@ -229,7 +230,8 @@ class AlSagrAPIClient:
             "proposalId": proposal_id,
         }
         
-        data = await self._get(endpoint, params)
+        # Use POST instead of GET (API returns 405 for GET)
+        data = await self._post(endpoint, params)
         
         if data:
             # Data is a list of benefit objects with benefitId and value fields

@@ -103,9 +103,106 @@ async def intercept_quotation_id(page) -> int:
     return quotation_id
 
 
+async def upload_census_and_navigate(page, quotation_id: int):
+    """
+    Upload census data and navigate to benefit structure page.
+    
+    This is REQUIRED for benefit structure to have data.
+    Without census, the API returns empty benefit structure.
+    
+    Flow (from old process_page.py):
+    1. Click Next → Census Data page
+    2. Click button "2" (opens file dialog)
+    3. Set file via "Select Excel File:" label
+    4. Click "Upload" button
+    5. Click "Proceed" button
+    6. Click Next → Benefit Structure page
+    
+    Args:
+        page: Playwright page object
+        quotation_id: Quotation ID
+        
+    Returns:
+        bool: True if successful
+    """
+    from src.utils.load_yaml import ALSAGR_TEMPLATES_DIR
+    import os
+    import time
+    
+    try:
+        print("\n📋 Uploading census data...")
+        
+        # Step 1: Click Next to go to Census Data page
+        await page.get_by_role("button", name="Next m").click()
+        alsagr_logger.debug("Clicked Next Button → Census Data page")
+        time.sleep(MED_SLEEP)
+        
+        # Step 2: Click Upload Button (name="2" opens the file dialog area)
+        await page.get_by_role("button", name="2").click()
+        alsagr_logger.debug("Clicked Upload Button (2)")
+        time.sleep(MED_SLEEP)
+        print("   → Opened file upload dialog")
+        
+        # Step 3: Set file to upload
+        file_path = os.path.join(ALSAGR_TEMPLATES_DIR, "MemberUpload.xlsx")
+        print(f"   → Uploading: {file_path}")
+        
+        if not os.path.exists(file_path):
+            alsagr_logger.error(f"Census file not found: {file_path}")
+            print(f"   ❌ File not found: {file_path}")
+            return False
+        
+        await page.get_by_label("Select Excel File:").set_input_files(file_path)
+        alsagr_logger.debug("File selected")
+        time.sleep(MED_SLEEP)
+        
+        # Step 4: Click Upload Button (this uploads the file)
+        await page.get_by_role("button", name="Upload").click()
+        alsagr_logger.debug("Clicked Upload button")
+        time.sleep(MAX_SLEEP)  # Wait longer for file processing
+        print("   ✓ File uploaded")
+        
+        # Handle duplicate rows popup BEFORE Proceed (e.g., "Row X and Row Y are duplicated")
+        # This popup appears after upload and blocks the Proceed button
+        try:
+            popup_ok = page.locator('button:has-text("Ok")')
+            if await popup_ok.is_visible(timeout=5000):
+                await popup_ok.click()
+                alsagr_logger.debug("Clicked Ok on duplicate rows popup")
+                print("   → Dismissed duplicate rows warning")
+                time.sleep(MED_SLEEP)
+        except Exception:
+            pass  # No popup, continue
+        
+        # Step 5: Click Proceed button
+        await page.get_by_text("Proceed").click()
+        alsagr_logger.debug("Clicked Proceed button")
+        time.sleep(MED_SLEEP)
+        
+        print("   ✓ Census data processed")
+        
+        # Step 6: Click Next to go to Benefit Structure
+        await page.get_by_role("button", name="Next m").click()
+        alsagr_logger.debug("Clicked Next Button → Benefit Structure page")
+        time.sleep(MAX_SLEEP)
+        
+        print("   ✓ Navigated to Benefit Structure page")
+        return True
+        
+    except Exception as e:
+        alsagr_logger.error(f"Failed to upload census and navigate: {e}")
+        print(f"   ❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 async def navigate_to_benefit_structure(page, quotation_id: int):
     """
     Navigate to the benefit structure page for a specific quotation.
+    
+    This function now calls upload_census_and_navigate() to ensure
+    census data is uploaded before navigating to benefit structure.
     
     Args:
         page: Playwright page object
@@ -114,23 +211,8 @@ async def navigate_to_benefit_structure(page, quotation_id: int):
     Returns:
         bool: True if navigation successful
     """
-    try:
-        # Try direct URL navigation to benefit structure
-        benefit_url = f"https://miportal.alsagrins.ae/#/groupquotationbenefitstructure?quotationId={quotation_id}"
-        alsagr_logger.info(f"Navigating to benefit structure: {benefit_url}")
-        print(f"\n📋 Navigating to benefit structure page...")
-        
-        await page.goto(benefit_url)
-        await page.wait_for_load_state('networkidle')
-        await asyncio.sleep(3)
-        
-        print(f"   ✓ Navigated to benefit structure page")
-        return True
-        
-    except Exception as e:
-        alsagr_logger.error(f"Could not navigate to benefit structure: {e}")
-        print(f"   ⚠️  Could not navigate directly: {e}")
-        return False
+    # Use the full flow that uploads census data
+    return await upload_census_and_navigate(page, quotation_id)
 
 
 async def run_alsagr_api_extraction_hybrid(

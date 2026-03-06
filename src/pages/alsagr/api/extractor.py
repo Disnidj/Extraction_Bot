@@ -187,7 +187,9 @@ class AlSagrAPIExtractor:
             print(f"\n📋 Step 2: Extracting benefits for {len(unique_plans)} unique plans...")
             print("   (Only 1 API call per plan - benefits identical across categories)")
             
-            # Step 3: Get benefits for each unique plan and filter by Visa Region
+            # Step 3: Get benefits for each unique plan
+            # NOTE: For API extraction, we include ALL plans (no visa region filter)
+            # This ensures we get all dropdown values for the database
             all_plans_benefits = []
             
             for idx, plan in enumerate(unique_plans, 1):
@@ -203,40 +205,66 @@ class AlSagrAPIExtractor:
                 )
                 
                 if benefits:
-                    # Check Visa Region before processing
+                    # Check Visa Region - only include Dubai plans
                     visa_region = self._get_visa_region_from_benefits(benefits)
                     
                     if visa_region == REQUIRED_VISA_REGION:
                         plan_record = self._process_plan_benefits(plan, benefits)
                         all_plans_benefits.append(plan_record)
-                        print(f"      ✓ Got {len(benefits)} benefit values (Visa Region: {visa_region}) - INCLUDED")
+                        print(f"      ✓ Got {len(benefits)} benefit values (Visa Region: {visa_region})")
                     else:
-                        print(f"      ⏩ Skipping - Visa Region: {visa_region} (Required: {REQUIRED_VISA_REGION})")
+                        print(f"      ⏩ Skipping - Visa Region: {visa_region or 'N/A'} (Required: {REQUIRED_VISA_REGION})")
                 else:
                     error = f"Failed to get benefits for plan {plan_id}"
                     self.results["errors"].append(error)
                     print(f"      ❌ {error}")
             
-            # Store only filtered plans
+            # Store all plans
             self.results["plans"] = all_plans_benefits
             self.stats["plans_count"] = len(all_plans_benefits)
-            print(f"\n   ✓ {len(all_plans_benefits)} plans matched Visa Region = '{REQUIRED_VISA_REGION}'")
+            print(f"\n   ✓ Extracted {len(all_plans_benefits)} plans")
             
-            # Create Network dropdown record with all Dubai-filtered plan names
+            # Create Network dropdown records - one per plan name
+            # Portal's "Plan" names go to "Network" dropdown (MapID 3)
+            # Each plan name is a Selection_Value for the Network dropdown
             if all_plans_benefits:
-                plan_names = [p["planName"] for p in all_plans_benefits]
-                network_record = {
-                    "data": {
-                        "Portal": PORTAL_NAME,
-                        "Region": PORTAL_REGION,
-                        "TPA": SELECTED_TPA_NAME,  # Fixed TPA
-                        "Network": "",  # Empty for dropdown option
-                        "field name": "Plan",  # Maps to Network dropdown
-                        "values": plan_names,  # All Dubai-filtered plan names
+                for plan in all_plans_benefits:
+                    plan_name = plan["planName"]
+                    network_record = {
+                        "data": {
+                            "Portal": PORTAL_NAME,
+                            "Region": PORTAL_REGION,
+                            "TPA": SELECTED_TPA_NAME,  # Fixed TPA
+                            "Network": "",  # Empty - this IS the dropdown being populated
+                            "field name": "Plan",  # Maps to Network dropdown via FIELD_MAPPING
+                            "values": [plan_name],  # Single plan name as value
+                        }
                     }
-                }
-                self.results["records"].append(network_record)
-                print(f"   ✓ Created Network dropdown with {len(plan_names)} plans")
+                    self.results["records"].append(network_record)
+                
+                print(f"   ✓ Created Network dropdown with {len(all_plans_benefits)} plan values")
+                
+                # Create Plan_Selection dropdown records - one per plan's network type
+                # Portal's "Network" (RN/GN/GN+) goes to "Plan_Selection" dropdown (MapID 63)
+                # Each network is associated with its parent Network (plan name)
+                for plan in all_plans_benefits:
+                    plan_name = plan["planName"]
+                    network_type = plan.get("network_type", "")
+                    
+                    if network_type:
+                        plan_selection_record = {
+                            "data": {
+                                "Portal": PORTAL_NAME,
+                                "Region": PORTAL_REGION,
+                                "TPA": SELECTED_TPA_NAME,
+                                "Network": plan_name,  # Cascading: depends on Network (plan name)
+                                "field name": "Network",  # Maps to Plan_Selection dropdown
+                                "values": [network_type],  # RN, GN, or GN+
+                            }
+                        }
+                        self.results["records"].append(plan_selection_record)
+                
+                print(f"   ✓ Created Plan_Selection dropdown records for {len(all_plans_benefits)} plans")
             
             # Step 4: Create extraction records (for formatter)
             self._create_records()
@@ -288,10 +316,11 @@ class AlSagrAPIExtractor:
             Visa Region value or None
         """
         # benefitId 8 = "Visa Region" based on BENEFIT_FIELD_MAPPING
+        # API returns valueText (not value) - e.g. {"benefitId":8,"valueText":"Dubai"}
         for benefit in benefits:
             benefit_id = benefit.get("benefitId")
             if benefit_id == 8:  # Visa Region
-                return benefit.get("value", "")
+                return benefit.get("valueText", "")
         return None
     
     def _process_plan_benefits(self, plan: Dict, benefits: List[Dict]) -> Dict:
@@ -303,21 +332,26 @@ class AlSagrAPIExtractor:
             benefits: List of benefit objects with benefitId, value, etc.
             
         Returns:
-            Processed plan record
+            Processed plan record with benefits and network_type (RN/GN)
         """
         plan_record = {
             "planId": plan["planId"],
             "planName": plan["planName"],
+            "network_type": "",  # Will store RN/GN from benefitId 9 (Portal's "Network" field)
             "benefits": {},
         }
         
-        # Map benefitId to value
+        # Map benefitId to valueText (API returns valueText, not value)
         for benefit in benefits:
             benefit_id = benefit.get("benefitId")
-            value = benefit.get("value", "")
+            value = benefit.get("valueText", "")  # API returns valueText field
             
             # Get field name from mapping, or use benefitId as fallback
             field_name = BENEFIT_FIELD_MAPPING.get(benefit_id, f"Benefit_{benefit_id}")
+            
+            # benefitId 9 is the "Network" field (RN, GN, GN+) - store at plan level
+            if benefit_id == 9:
+                plan_record["network_type"] = value
             
             plan_record["benefits"][field_name] = {
                 "benefitId": benefit_id,
@@ -331,16 +365,16 @@ class AlSagrAPIExtractor:
         Create flat records for the formatter.
         
         Each record represents one field value for the database:
-        {"Portal": "...", "TPA": "NEXT CARE MANAGEMENT LLC", "Network": "Plan", "field_name": "...", "value": "..."}
+        {"Portal": "...", "TPA": "...", "Network": "plan_name", "field_name": "...", "value": "..."}
         
         Filtering applied:
         - TPA: Only NEXT CARE MANAGEMENT LLC
         - Plans: Only with Visa Region = Dubai
-        - Network = Plan name
+        - Network = Plan name (portal's "Plan" → DB's "Network")
         """
         records = []
         
-        # TPA record already added in extract_all_benefits
+        # TPA, Network, and Plan_Selection records already added in extract_all_benefits
         
         for plan in self.results["plans"]:
             plan_name = plan["planName"]
@@ -352,21 +386,29 @@ class AlSagrAPIExtractor:
                 if not value:
                     continue
                 
+                # Skip "Network" field - already handled as Plan_Selection dropdown
+                # benefitId 9 values (RN/GN) are Plan_Selection dropdown options, not benefit values
+                if field_name == "Network":
+                    continue
+                
                 record = {
                     "data": {
                         "Portal": PORTAL_NAME,
                         "Region": PORTAL_REGION,
                         "TPA": SELECTED_TPA_NAME,  # Fixed TPA: NEXT CARE MANAGEMENT LLC
-                        "Network": plan_name,  # Plan name is the Network
+                        "Network": plan_name,  # Plan name → DB's Network column
                         "field name": field_name,
                         "values": [str(value)],  # Single value as list for consistency
                     }
                 }
                 records.append(record)
         
-        # Update records (keep TPA record from earlier)
-        tpa_records = [r for r in self.results["records"] if r.get("data", {}).get("field name") == "TPA"]
-        self.results["records"] = tpa_records + records
+        # Keep TPA, Network dropdown, and Plan_Selection dropdown records from earlier
+        dropdown_records = [
+            r for r in self.results["records"] 
+            if r.get("data", {}).get("field name") in ["TPA", "Plan", "Network"]
+        ]
+        self.results["records"] = dropdown_records + records
     
     def _print_summary(self):
         """Print extraction summary."""

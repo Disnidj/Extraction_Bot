@@ -19,12 +19,13 @@ Key Difference from Old Code:
 """
 
 import asyncio
+import os
 import time
 import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from src.utils.logger import alsagr_logger
-from src.utils.load_yaml import MED_SLEEP, MAX_SLEEP
+from src.utils.load_yaml import MED_SLEEP, MAX_SLEEP, ALSAGR_TEMPLATES_DIR
 
 
 # Default values for quotation creation
@@ -405,17 +406,32 @@ class AlSagrQuotationCreator:
                 except Exception as e2:
                     alsagr_logger.error(f"Alternative Save click also failed: {e2}")
             
-            await asyncio.sleep(MAX_SLEEP)
+            # Wait for loading spinner to appear and disappear
+            alsagr_logger.debug("Waiting for save operation to complete...")
+            await asyncio.sleep(2)  # Let spinner appear
             
-            # Wait for network with longer timeout
+            # Wait for page navigation (URL will change to include quoteId)
+            try:
+                # Wait for URL to change (indicates save completed and redirected)
+                await self.page.wait_for_function(
+                    "() => window.location.href.includes('quoteId=')",
+                    timeout=60000  # 60 seconds for slow saves
+                )
+                alsagr_logger.debug(f"Page navigated after save: {self.page.url}")
+            except Exception as e:
+                alsagr_logger.warning(f"URL didn't change after save: {e}")
+            
+            # Wait for network to settle after navigation
+            await asyncio.sleep(MAX_SLEEP)
             try:
                 await self.page.wait_for_load_state('networkidle', timeout=30000)
             except Exception:
                 alsagr_logger.debug("Network idle timeout - continuing anyway")
             
-            await asyncio.sleep(5)  # Extra wait for API response
+            # Extra wait for API responses to be captured
+            await asyncio.sleep(5)
             
-            # Unsubscribe
+            # Unsubscribe from response listener
             self.page.remove_listener('response', capture_response)
             
             # Log captured responses for debugging
@@ -428,12 +444,28 @@ class AlSagrQuotationCreator:
                 alsagr_logger.debug(f"Current URL after save attempt: {self.page.url}")
             
             # Click Pop-up Window Ok Button - try multiple selectors
+            # Wait for success popup to appear
             popup_clicked = False
+            alsagr_logger.debug("Looking for success popup...")
+            
+            # Try to find popup with "Successfully Saved" message first
+            try:
+                # Wait for success message to appear
+                success_msg = self.page.locator('text=/Successfully Saved/i')
+                await success_msg.wait_for(state='visible', timeout=10000)
+                alsagr_logger.debug("Success popup appeared")
+                await asyncio.sleep(1)  # Let popup fully render
+            except Exception:
+                alsagr_logger.debug("No success message popup found")
+            
+            # Try different OK button selectors
             for popup_selector in [
                 'button:has-text("Ok")',
-                'button:has-text("OK")',
-                'button[class*="ok"]',
-                '.swal2-confirm'
+                'button:has-text("OK")',  
+                'button.swal2-confirm',
+                '.swal2-confirm',
+                'button[class*="ok" i]',
+                'button[class*="confirm" i]'
             ]:
                 try:
                     popup_btn = self.page.locator(popup_selector).first
@@ -447,7 +479,10 @@ class AlSagrQuotationCreator:
                     continue
             
             if not popup_clicked:
-                alsagr_logger.debug("No popup found to click")
+                alsagr_logger.debug("No popup found to click - may have auto-closed")
+            
+            # Wait for page to stabilize after popup
+            await asyncio.sleep(MAX_SLEEP)
             
             # Check if we captured quotationId from network
             if captured_quotation_id:
@@ -667,9 +702,83 @@ class AlSagrQuotationCreator:
             alsagr_logger.debug(f"Could not extract quotation ID: {e}")
             return None
     
+    async def upload_census_data(self) -> bool:
+        """
+        Upload census data to the quotation.
+        
+        This is REQUIRED for benefit structure to have data.
+        Without census, the API returns empty benefit structure.
+        
+        Returns:
+            bool: True if successful
+        """
+        try:
+            print("\n📋 Uploading census data...")
+            
+            # Click Next Button to go to Census Data page
+            await self.page.get_by_role("button", name="Next m").click()
+            await asyncio.sleep(MAX_SLEEP)
+            await self.page.wait_for_load_state('networkidle')
+            print("   → Reached Census Data page")
+            
+            # Click Upload Button (button with icon "2")
+            try:
+                upload_btn = self.page.get_by_role("button", name="2")
+                await upload_btn.wait_for(state='visible', timeout=10000)
+                await upload_btn.click()
+                alsagr_logger.debug("Clicked Upload Button")
+                await asyncio.sleep(MED_SLEEP)
+            except Exception:
+                # Try alternative selector
+                await self.page.locator('button.btn-warning').first.click()
+                await asyncio.sleep(MED_SLEEP)
+            
+            # Set file to upload
+            file_path = os.path.join(ALSAGR_TEMPLATES_DIR, "MemberUpload.xlsx")
+            print(f"   → Uploading: {file_path}")
+            
+            if not os.path.exists(file_path):
+                alsagr_logger.error(f"Census file not found: {file_path}")
+                print(f"   ❌ File not found: {file_path}")
+                return False
+            
+            await self.page.get_by_label("Select Excel File:").set_input_files(file_path)
+            alsagr_logger.debug("File selected")
+            await asyncio.sleep(MED_SLEEP)
+            
+            # Click Upload Button
+            await self.page.get_by_role("button", name="Upload").click()
+            alsagr_logger.debug("Clicked Upload button")
+            await asyncio.sleep(MAX_SLEEP)
+            
+            # Wait for upload to complete
+            try:
+                await self.page.wait_for_load_state('networkidle', timeout=30000)
+            except Exception:
+                pass
+            await asyncio.sleep(MAX_SLEEP)
+            
+            # Click Proceed button
+            try:
+                proceed_btn = self.page.get_by_text("Proceed")
+                if await proceed_btn.is_visible(timeout=10000):
+                    await proceed_btn.click()
+                    alsagr_logger.debug("Clicked Proceed button")
+                    await asyncio.sleep(MAX_SLEEP)
+            except Exception as e:
+                alsagr_logger.debug(f"No Proceed button found: {e}")
+            
+            print("   ✓ Census data uploaded")
+            return True
+            
+        except Exception as e:
+            alsagr_logger.error(f"Failed to upload census data: {e}")
+            print(f"   ❌ Failed: {e}")
+            return False
+    
     async def navigate_to_benefit_structure(self) -> bool:
         """
-        Navigate to the Benefit Structure page after creating quotation.
+        Navigate to the Benefit Structure page after uploading census.
         
         Returns:
             bool: True if successful
@@ -677,27 +786,31 @@ class AlSagrQuotationCreator:
         try:
             print("\n📋 Navigating to Benefit Structure...")
             
-            # Click Next Button to go to Census Data
+            # Click Next Button to go to Benefit Structure
             await self.page.get_by_role("button", name="Next m").click()
             await asyncio.sleep(MAX_SLEEP)
-            await self.page.wait_for_load_state('networkidle')
-            print("   → Reached Census Data page")
             
-            # Click Next again to skip Census (no census upload for API extraction)
-            # Or direct navigation if quotation_id is known
+            # Wait for page to load
+            try:
+                await self.page.wait_for_load_state('networkidle', timeout=30000)
+            except Exception:
+                pass
+            await asyncio.sleep(MAX_SLEEP)
+            
+            # Verify we're on the benefit structure page
+            current_url = self.page.url
+            if 'benefitstructure' in current_url.lower():
+                print("   ✓ Reached Benefit Structure page")
+                return True
+            
+            # If not on benefit page, try direct navigation
             if self.quotation_id:
-                # Try direct URL navigation
                 benefit_url = f"https://miportal.alsagrins.ae/#/groupquotationbenefitstructure?quotationId={self.quotation_id}"
                 await self.page.goto(benefit_url)
                 await self.page.wait_for_load_state('networkidle')
                 await asyncio.sleep(3)
                 print("   ✓ Navigated to Benefit Structure page")
                 return True
-            
-            # Manual navigation through pages
-            await self.page.get_by_role("button", name="Next m").click()
-            await asyncio.sleep(MAX_SLEEP)
-            await self.page.wait_for_load_state('networkidle')
             
             print("   ✓ Reached Benefit Structure page")
             return True

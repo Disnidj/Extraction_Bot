@@ -58,7 +58,7 @@ ENDPOINTS = {
 # Display names MUST match FIELD_MAPPING[*][1] for proper database mapping
 BENEFIT_FIELD_MAPPING = {
     8: "Visa Region",
-    9: "Plan",                # Network dropdown uses Plan
+    9: "Network",             # Portal's Network field (RN, GN, GN+) → maps to Plan_Selection dropdown
     10: "OP Co-Insurance",
     11: "Phar.Co-Ins",        # Pharmacy Co-Insurance
     12: "Aggregate Limit",
@@ -142,7 +142,10 @@ FIELD_MAPPING = {
     # Visa Region - FILTER: Only 'Dubai' plans are extracted
     "visaRegion": ("Region", "Visa Region", 2),
     
-    # Plan is the Network dropdown
+    # Plan_Selection dropdown - Portal's "Network" field (RN, GN, GN+)
+    "network": ("Plan_Selection", "Network", 63),
+    
+    # Network dropdown - Portal's "Plan" field (plan names like ASNIC-2-02-12-5)
     "plan": ("Network", "Plan", 3),
     
     # Benefit fields
