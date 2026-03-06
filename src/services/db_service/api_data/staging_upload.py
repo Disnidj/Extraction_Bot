@@ -53,7 +53,6 @@ COMPLETE DATA FLOW (From Extraction to Database):
   │ DELETE FROM Staging_Table            │ ← Clear old data
   │         ↓                            │
   │ INSERT INTO Staging_Table            │ ← New data (already mapped!)
-  │ • Broker_ID                          │
   │ • Company (standardized)              │
   │ • TPA                                │
   │ • Network                            │
@@ -534,7 +533,6 @@ class StagingUploader:
         2. INSERT new records with Run_ID tag
         
         Data Structure (each record must have):
-        - Broker_ID: int
         - Company: str (standardized name)
         - TPA: str
         - Network: str
@@ -558,8 +556,8 @@ class StagingUploader:
         # Insert new records in batches
         insert_query = f"""
             INSERT INTO {STAGING_TABLE} 
-            (Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value, Run_ID)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (Company, TPA, Network, Region, Dropdown_Name, Selection_Value, Run_ID)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         
         rows_inserted = 0
@@ -567,7 +565,6 @@ class StagingUploader:
         
         for record in records:
             batch.append((
-                record.get("Broker_ID", 3),
                 record.get("Company", ""),
                 record.get("TPA", ""),
                 record.get("Network", ""),
@@ -618,8 +615,8 @@ class StagingUploader:
         # Backup ALL records from original table (complete snapshot)
         backup_query = f"""
             INSERT INTO {BACKUP_TABLE} 
-            (Run_ID, Original_CTN_ID, Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
-            SELECT %s, CTN_ID, Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+            (Run_ID, Original_CTN_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
+            SELECT %s, CTN_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
             FROM {ORIGINAL_TABLE}
         """
         
@@ -695,7 +692,7 @@ class StagingUploader:
             
             # Get all staging records for this company
             staging_query = f"""
-                SELECT Broker_ID, Company, TPA, Network, Region, 
+                SELECT Company, TPA, Network, Region, 
                        Dropdown_Name, Selection_Value
                 FROM {STAGING_TABLE}
                 WHERE Company = %s AND Run_ID = %s AND Dropdown_Name IN ({placeholders})
@@ -705,7 +702,7 @@ class StagingUploader:
             
             # Get all original records for this company
             original_query = f"""
-                SELECT Broker_ID, Company, TPA, Network, Region, 
+                SELECT Company, TPA, Network, Region, 
                        Dropdown_Name, Selection_Value
                 FROM {ORIGINAL_TABLE}
                 WHERE Company = %s AND Dropdown_Name IN ({placeholders})
@@ -719,7 +716,6 @@ class StagingUploader:
             staging_by_base_key = {}  # Key without Selection_Value
             
             for row in staging_rows:
-                broker_id = row.get('Broker_ID') or row.get('broker_id', 3)
                 comp = row.get('Company') or row.get('company', '')
                 tpa = row.get('TPA') or row.get('tpa', '')
                 network = row.get('Network') or row.get('network', '')
@@ -732,7 +728,6 @@ class StagingUploader:
                 
                 staging_full_keys.add(full_key)
                 staging_by_base_key.setdefault(base_key, []).append({
-                    'broker_id': broker_id,
                     'value': value
                 })
             
@@ -740,7 +735,6 @@ class StagingUploader:
             original_by_base_key = {}
             
             for row in original_rows:
-                broker_id = row.get('Broker_ID') or row.get('broker_id', 3)
                 comp = row.get('Company') or row.get('company', '')
                 tpa = row.get('TPA') or row.get('tpa', '')
                 network = row.get('Network') or row.get('network', '')
@@ -753,7 +747,6 @@ class StagingUploader:
                 
                 original_full_keys.add(full_key)
                 original_by_base_key.setdefault(base_key, []).append({
-                    'broker_id': broker_id,
                     'value': value
                 })
             
@@ -793,7 +786,6 @@ class StagingUploader:
                             # Example: "5 %" in original → "5%" in staging
                             report.modified_records.append(ChangeRecord(
                                 change_type='UPDATE',
-                                broker_id=staging_item['broker_id'],
                                 company=base_key[0],
                                 tpa=base_key[1],
                                 network=base_key[2],
@@ -814,7 +806,6 @@ class StagingUploader:
                         # Example: "X" in staging, but original only has [A, B, C]
                         report.new_records.append(ChangeRecord(
                             change_type='INSERT',
-                            broker_id=staging_item['broker_id'],
                             company=base_key[0],
                             tpa=base_key[1],
                             network=base_key[2],
@@ -858,7 +849,6 @@ class StagingUploader:
                     # This is a deleted record - group exists in staging but value doesn't
                     report.deleted_records.append(ChangeRecord(
                         change_type='DELETE',
-                        broker_id=orig_item['broker_id'],
                         company=base_key[0],
                         tpa=base_key[1],
                         network=base_key[2],
@@ -1145,11 +1135,11 @@ class StagingUploader:
                 # Insert new value
                 insert_query = f"""
                     INSERT INTO {ORIGINAL_TABLE}
-                    (Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    (Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """
                 affected = self._execute(insert_query, (
-                    rec.broker_id or 3, rec.company, rec.tpa, rec.network,
+                    rec.company, rec.tpa, rec.network,
                     rec.region, rec.dropdown_name, rec.new_value
                 ))
                 updated += 1 if affected else 0
@@ -1159,14 +1149,14 @@ class StagingUploader:
             print(f"   Inserting {len(report.new_records)} records...")
             insert_query = f"""
                 INSERT INTO {ORIGINAL_TABLE}
-                (Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """
             
             batch = []
             for rec in report.new_records:
                 batch.append((
-                    rec.broker_id or 3, rec.company, rec.tpa, rec.network,
+                    rec.company, rec.tpa, rec.network,
                     rec.region, rec.dropdown_name, rec.new_value
                 ))
                 

@@ -4,16 +4,20 @@ Converts extraction results to database-compatible format.
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
-- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
 Key Mappings:
 - Portal's "Plan" (plan names) → DB's "Network" column & "Network" dropdown
 - Portal's "Network" (RN, GN) → DB's "Plan_Selection" dropdown (Dropdown_Name, not column)
+"""
+
+import os
+import json
 from typing import Dict, List
 from datetime import datetime
 from src.services.formatter_service import expand_empty_tpa_network
 from src.utils.logger import alsagr_logger
-from .mapping import PORTAL_NAME, PORTAL_REGION, FIELD_MAPPING, BROKER_ID, COMPANY_NAME
+from .mapping import PORTAL_NAME, PORTAL_REGION, FIELD_MAPPING, COMPANY_NAME
 
 # Create reverse mapping: Portal_Field_Name (display) -> Dropdown_Name
 # e.g., "Plan" -> "Network", "Network" -> "Plan_Selection"
@@ -25,27 +29,24 @@ class AlSagrFormatter:
     Formats Al Sagr extraction results and writes to file.
     
     Output format matches database schema:
-    {"Broker_ID": 3, "Company": "AL SAGR...", "TPA": "...", "Network": "...", 
+    {"Company": "AL SAGR...", "TPA": "...", "Network": "...", 
      "Region": "...", "Dropdown_Name": "...", "Selection_Value": "..."}
     
     Files are saved to: {output_dir}/alsagr/alsagr_extracted_YYYYMMDD_HHMMSS.txt
     """
     
-    def __init__(self, output_path: str = None, output_dir: str = "extracted_data", 
-                 broker_id: int = BROKER_ID):
+    def __init__(self, output_path: str = None, output_dir: str = "extracted_data"):
         """
         Initialize formatter with output path.
         
         Args:
             output_path: Path to output file. If None, generates portal-specific path.
             output_dir: Base output directory for extracted files.
-            broker_id: Broker ID for database records.
         """
         self.portal_name = "alsagr"
         self.company_name = COMPANY_NAME
         self.output_path = output_path
         self.output_dir = output_dir
-        self.broker_id = broker_id
         self.records_written = 0
         
         # If no path provided, create portal-specific path
@@ -81,7 +82,7 @@ class AlSagrFormatter:
         {"data": {"Portal": "...", "field name": "...", "values": [...]}}
         
         To database format (one row per value):
-        {"Broker_ID": 3, "Company": "AL SAGR...", "TPA": "...", "Network": "...",
+        {"Company": "AL SAGR...", "TPA": "...", "Network": "...",
          "Region": "...", "Dropdown_Name": "...", "Selection_Value": "..."}
         
         Args:
@@ -112,7 +113,6 @@ class AlSagrFormatter:
                 if not value:
                     continue
                 row = {
-                    "Broker_ID": self.broker_id,
                     "Company": self.company_name,
                     "TPA": tpa,
                     "Network": network,
@@ -124,7 +124,7 @@ class AlSagrFormatter:
         
         # Handle new database format (already flat)
         elif "Selection_Value" in record:
-            record.setdefault("Broker_ID", self.broker_id)
+            # Ensure company is set
             record.setdefault("Company", self.company_name)
             
             # Remove Plan_Selection if present (not in DB schema)
@@ -248,7 +248,6 @@ class AlSagrFormatter:
             "company": self.company_name,
             "records_written": self.records_written,
             "output_path": self.output_path,
-            "broker_id": self.broker_id,
         }
 
 

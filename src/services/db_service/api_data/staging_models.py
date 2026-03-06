@@ -22,7 +22,6 @@ class ChangeRecord:
         dropdown_name: Dropdown field name
         old_value: Previous value (for UPDATE/DELETE)
         new_value: New value (for INSERT/UPDATE)
-        broker_id: Broker ID
         difference_type: Type of difference detected (VALUE_CHANGE, WHITESPACE_CHANGE, CASE_CHANGE)
     """
     change_type: str  # 'INSERT', 'UPDATE', 'DELETE'
@@ -33,7 +32,6 @@ class ChangeRecord:
     dropdown_name: str
     old_value: Optional[str] = None
     new_value: Optional[str] = None
-    broker_id: Optional[int] = None
     difference_type: Optional[str] = None  # VALUE_CHANGE, WHITESPACE_CHANGE, CASE_CHANGE
     
     def get_difference_description(self) -> str:
@@ -59,7 +57,6 @@ class ChangeRecord:
             'dropdown_name': self.dropdown_name,
             'old_value': self.old_value,
             'new_value': self.new_value,
-            'broker_id': self.broker_id,
             'difference_type': self.difference_type,
             'difference_description': self.get_difference_description()
         }

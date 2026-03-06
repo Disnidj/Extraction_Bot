@@ -450,13 +450,12 @@ def upload_single_file(file_path: str) -> Tuple[bool, int, str]:
         # Insert new data
         insert_query = f"""
             INSERT INTO {TABLE_NAME} 
-            (Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (Company, TPA, Network, Region, Dropdown_Name, Selection_Value)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         
         values = [
             (
-                r.get("Broker_ID", 0),
                 r.get("Company", ""),
                 r.get("TPA", ""),
                 r.get("Network", ""),

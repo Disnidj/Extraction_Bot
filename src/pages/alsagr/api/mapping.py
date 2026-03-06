@@ -190,5 +190,4 @@ REQUIRED_VISA_REGION = "Dubai"
 # BROKER CONFIGURATION
 # ============================================================================
 
-BROKER_ID = 3
 COMPANY_NAME = "AL SAGR INSURANCE COMPANY"

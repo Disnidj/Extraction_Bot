@@ -4,7 +4,7 @@ Converts API responses to database format (matches Orient Aura/Qatar pattern exa
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
-- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 - Network = Plan name (NOT TPA name!)
 
 TPA/Network Expansion:
@@ -20,10 +20,6 @@ from src.services.formatter_service import expand_empty_tpa_network
 from src.utils.logger import nlgi_aura_logger
 from .mapping import NLGI_MAPPING, PORTAL_REGION
 
-
-# Default Broker ID
-DEFAULT_BROKER_ID = 3
-
 # Get group name for TPA prefix
 GROUP_NAME = NLGI_MAPPING["group"]["group_name"]
 
@@ -31,16 +27,14 @@ GROUP_NAME = NLGI_MAPPING["group"]["group_name"]
 class NLGIAuraFormatter:
     """Formats NLGI Aura API data for database insertion"""
     
-    def __init__(self, results: dict = None, broker_id: int = DEFAULT_BROKER_ID):
+    def __init__(self, results: dict = None):
         """
         Initialize formatter.
         
         Args:
             results: Extraction results dict (optional)
-            broker_id: Broker ID for database records
         """
         self.results = results
-        self.broker_id = broker_id
         self.company = "NLGI Aura"
         self.output_lines = []
     
@@ -195,7 +189,6 @@ class NLGIAuraFormatter:
         """
         for value in values:
             row = {
-                "Broker_ID": self.broker_id,
                 "Company": self.company,
                 "TPA": tpa,
                 "Network": network,

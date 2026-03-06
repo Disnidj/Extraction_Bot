@@ -4,7 +4,7 @@ Converts JSON extraction results to database-compatible format.
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
-- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
 TPA/Network Expansion:
 - Uses shared expansion service from src.services.formatter_service
@@ -20,23 +20,17 @@ from src.utils.logger import orient_aura_logger
 from .mapping import PORTAL_REGION
 
 
-# Default Broker ID - can be configured
-DEFAULT_BROKER_ID = 3
-
-
 class OrientAuraFormatter:
     """Formats Orient Aura benefits JSON to database-compatible format."""
     
-    def __init__(self, results: dict = None, broker_id: int = DEFAULT_BROKER_ID):
+    def __init__(self, results: dict = None):
         """
         Initialize formatter.
         
         Args:
             results: Extraction results dict (optional, can load from file)
-            broker_id: Broker ID for database records
         """
         self.results = results
-        self.broker_id = broker_id
         self.output_lines = []
         self.company_name = "Orient Aura"
     
@@ -55,7 +49,7 @@ class OrientAuraFormatter:
         """
         Convert JSON results to database-compatible format.
         Each line is a JSON object with:
-        - Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+        - Company, TPA, Network, Region, Dropdown_Name, Selection_Value
         
         Returns:
             list: List of formatted lines (one per Selection_Value)
@@ -212,7 +206,6 @@ class OrientAuraFormatter:
         """
         for value in values:
             row = {
-                "Broker_ID": self.broker_id,
                 "Company": self.company_name,
                 "TPA": tpa,
                 "Network": network,

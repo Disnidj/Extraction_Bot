@@ -6,7 +6,7 @@ Writes records to portal-specific folder: extracted_data/adnic/adnic_extracted_Y
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
-- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
 TPA/Network Expansion:
 - Uses shared expansion service from src.services.formatter_service
@@ -24,9 +24,6 @@ from src.utils.logger import adnic_logger
 # Portal name for this formatter
 PORTAL_NAME = "adnic"
 
-# Default Broker ID - can be configured
-DEFAULT_BROKER_ID = 3
-
 # ADNIC dropdown name mappings - moved to database table Medical_CTN_Portal_Field_Mapping
 # This allows centralized mapping management in the database
 ADNIC_DROPDOWN_NAMES = {
@@ -39,27 +36,24 @@ class ADNICFormatter:
     Formats ADNIC extraction results and writes to file.
     
     Output format matches database schema:
-    {"Broker_ID": 3, "Company": "ADNIC", "TPA": "...", "Network": "...", 
+    {"Company": "ADNIC", "TPA": "...", "Network": "...", 
      "Region": "...", "Dropdown_Name": "...", "Selection_Value": "..."}
     
     Files are saved to: {output_dir}/adnic/adnic_extracted_YYYYMMDD_HHMMSS.txt
     """
     
-    def __init__(self, output_path: str = None, output_dir: str = "extracted_data",
-                 broker_id: int = DEFAULT_BROKER_ID):
+    def __init__(self, output_path: str = None, output_dir: str = "extracted_data"):
         """
         Initialize formatter with output path.
         
         Args:
             output_path: Path to output file. If None, generates portal-specific path.
             output_dir: Base output directory for extracted files.
-            broker_id: Broker ID for database records.
         """
         self.portal_name = PORTAL_NAME
         self.company_name = "ADNIC"
         self.output_path = output_path
         self.output_dir = output_dir
-        self.broker_id = broker_id
         self.records_written = 0
         
         # If no path provided, create portal-specific path
@@ -95,7 +89,7 @@ class ADNICFormatter:
         {"data": {"Portal": "...", "field_name": "...", "values": [...]}}
         
         To database format (one row per value):
-        {"Broker_ID": 3, "Company": "ADNIC", ..., "Selection_Value": "..."}
+        {"Company": "ADNIC", ..., "Selection_Value": "..."}
         
         Args:
             record: Record dict to format (can be old or new format)
@@ -123,7 +117,6 @@ class ADNICFormatter:
                 if not value:
                     continue
                 row = {
-                    "Broker_ID": self.broker_id,
                     "Company": self.company_name,
                     "TPA": tpa,
                     "Network": network,
@@ -142,8 +135,7 @@ class ADNICFormatter:
                     record["Dropdown_Name"]
                 )
             
-            # Ensure broker_id and company are set
-            record.setdefault("Broker_ID", self.broker_id)
+            # Ensure company is set
             record.setdefault("Company", self.company_name)
             rows.append(json.dumps(record, ensure_ascii=False))
         

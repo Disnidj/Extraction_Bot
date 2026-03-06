@@ -43,9 +43,7 @@ def expand_empty_tpa_network(records: List[Dict]) -> List[Dict]:
     
     Args:
         records: List of record dictionaries with database schema format:
-                 {"Broker_ID": int, "Company": str, "TPA": str, "Network": str,
-                  "Region": str, "Dropdown_Name": str, "Selection_Value": str}
-        
+                 {"Company": str, "TPA": str, "Network": str,
     Returns:
         Expanded list of records with TPA/Network combinations populated
         

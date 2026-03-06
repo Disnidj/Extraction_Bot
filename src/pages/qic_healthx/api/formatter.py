@@ -4,7 +4,7 @@ Converts API responses to database format.
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
-- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
 TPA: NAS (all plans use NAS network)
 Network: Plan name without region suffix (e.g., "GN", "RN", "SRN")
@@ -19,23 +19,17 @@ from src.utils.logger import qic_healthx_logger
 from .mapping import PORTAL_NAME, PORTAL_REGION, TPA_NAME
 
 
-# Default Broker ID
-DEFAULT_BROKER_ID = 3
-
-
 class QICHealthXFormatter:
     """Formats QIC HealthX API data for database insertion"""
     
-    def __init__(self, results: dict = None, broker_id: int = DEFAULT_BROKER_ID):
+    def __init__(self, results: dict = None):
         """
         Initialize formatter.
         
         Args:
             results: Extraction results dict (optional)
-            broker_id: Broker ID for database records
         """
         self.results = results
-        self.broker_id = broker_id
         self.company = PORTAL_NAME
         self.output_lines = []
     
@@ -139,7 +133,6 @@ class QICHealthXFormatter:
                 continue
                 
             row = {
-                "Broker_ID": self.broker_id,
                 "Company": self.company,
                 "TPA": tpa,
                 "Network": network,

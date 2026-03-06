@@ -4,12 +4,11 @@ Converts JSON extraction results to database-compatible format.
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
-- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
 Database Schema Reference:
 {
     "CTN_ID": auto-generated,
-    "Broker_ID": 3,
     "Company": "MaxHealth",
     "TPA": "NAS",
     "Network": "MAXMED - NAS",
@@ -35,23 +34,17 @@ from src.services.formatter_service import expand_empty_tpa_network
 from src.utils.logger import maxhealth_logger
 
 
-# Default Broker ID - can be configured
-DEFAULT_BROKER_ID = 3
-
-
 class MaxHealthFormatter:
     """Formats MaxHealth extraction results to database-compatible format."""
     
-    def __init__(self, results: dict = None, broker_id: int = DEFAULT_BROKER_ID):
+    def __init__(self, results: dict = None):
         """
         Initialize formatter.
         
         Args:
             results: Extraction results dict (optional, can load from file)
-            broker_id: Broker ID for database records
         """
         self.results = results
-        self.broker_id = broker_id
         self.output_lines = []
         self.company_name = "MaxHealth"
     
@@ -158,7 +151,7 @@ class MaxHealthFormatter:
         Add formatted rows to output (one row per value).
         
         Database format:
-        {"Broker_ID": 3, "Company": "MaxHealth", "TPA": "NAS", "Network": "MAXMED", 
+        {"Company": "MaxHealth", "TPA": "NAS", "Network": "MAXMED", 
          "Region": "Dubai", "Dropdown_Name": "Plan", "Selection_Value": "Bronze"}
         
         Args:
@@ -176,7 +169,6 @@ class MaxHealthFormatter:
                 continue
                 
             row = {
-                "Broker_ID": self.broker_id,
                 "Company": self.company_name,
                 "TPA": tpa,
                 "Network": network,

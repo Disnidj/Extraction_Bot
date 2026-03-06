@@ -6,7 +6,7 @@ Writes records to portal-specific folder: extracted_data/sukoon/sukoon_extracted
 
 Output Format matches database schema:
 - One row per Selection_Value (flat structure)
-- Fields: Broker_ID, Company, TPA, Network, Region, Dropdown_Name, Selection_Value
+- Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
 TPA/Network Expansion:
 - Uses shared expansion service from src.services.formatter_service
@@ -25,9 +25,6 @@ from .mapping import PORTAL_REGION
 # Portal name for this formatter
 PORTAL_NAME = "sukoon"
 
-# Default Broker ID - can be configured
-DEFAULT_BROKER_ID = 3
-
 # Sukoon-specific dropdown name mapping
 # Maps extraction field names to portal-specific names that match the mapping table
 SUKOON_DROPDOWN_NAMES = {
@@ -41,27 +38,24 @@ class SukoonFormatter:
     Formats Sukoon extraction results and writes to file.
     
     Output format matches database schema:
-    {"Broker_ID": 3, "Company": "Sukoon", "TPA": "...", "Network": "...", 
+    {"Company": "Sukoon", "TPA": "...", "Network": "...", 
      "Region": "...", "Dropdown_Name": "...", "Selection_Value": "..."}
     
     Files are saved to: {output_dir}/sukoon/sukoon_extracted_YYYYMMDD_HHMMSS.txt
     """
     
-    def __init__(self, output_path: str = None, output_dir: str = "extracted_data", 
-                 broker_id: int = DEFAULT_BROKER_ID):
+    def __init__(self, output_path: str = None, output_dir: str = "extracted_data"):
         """
         Initialize formatter with output path.
         
         Args:
             output_path: Path to output file. If None, generates portal-specific path.
             output_dir: Base output directory for extracted files.
-            broker_id: Broker ID for database records.
         """
         self.portal_name = PORTAL_NAME
         self.company_name = "Sukoon"
         self.output_path = output_path
         self.output_dir = output_dir
-        self.broker_id = broker_id
         self.records_written = 0
         
         # If no path provided, create portal-specific path
@@ -97,7 +91,7 @@ class SukoonFormatter:
         {"data": {"Portal": "...", "field_name": "...", "values": [...]}}
         
         To database format (one row per value):
-        {"Broker_ID": 3, "Company": "Sukoon", ..., "Selection_Value": "..."}
+        {"Company": "Sukoon", ..., "Selection_Value": "..."}
         
         Args:
             record: Record dict to format (can be old or new format)
@@ -125,7 +119,6 @@ class SukoonFormatter:
                 if not value:
                     continue
                 row = {
-                    "Broker_ID": self.broker_id,
                     "Company": self.company_name,
                     "TPA": tpa,
                     "Network": network,
@@ -137,8 +130,7 @@ class SukoonFormatter:
         
         # Handle new database format (already flat)
         elif "Selection_Value" in record:
-            # Ensure broker_id and company are set
-            record.setdefault("Broker_ID", self.broker_id)
+            # Ensure company is set
             record.setdefault("Company", self.company_name)
             
             # Default Region to PORTAL_REGION if empty
