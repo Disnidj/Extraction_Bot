@@ -258,7 +258,7 @@ class AlSagrAPIExtractor:
                                 "Region": PORTAL_REGION,
                                 "TPA": SELECTED_TPA_NAME,
                                 "Network": plan_name,  # Cascading: depends on Network (plan name)
-                                "field name": "Network",  # Maps to Plan_Selection dropdown
+                                "field name": "Plan_Selection",  # Maps to Plan_Selection dropdown (DB_TO_PORTAL_DISPLAY["Plan_Selection"] = "Network" = portal display)
                                 "values": [network_type],  # RN, GN, or GN+
                             }
                         }
@@ -403,10 +403,10 @@ class AlSagrAPIExtractor:
                 }
                 records.append(record)
         
-        # Keep TPA, Network dropdown, and Plan_Selection dropdown records from earlier
+        # Keep TPA, Plan (Network dropdown), and Plan_Selection dropdown records from earlier
         dropdown_records = [
             r for r in self.results["records"] 
-            if r.get("data", {}).get("field name") in ["TPA", "Plan", "Network"]
+            if r.get("data", {}).get("field name") in ["TPA", "Plan", "Plan_Selection"]
         ]
         self.results["records"] = dropdown_records + records
     

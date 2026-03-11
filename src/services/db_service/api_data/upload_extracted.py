@@ -195,17 +195,29 @@ def upload_to_database(output_dir: str) -> Tuple[bool, int, str, dict, dict, Opt
             print(f"      • Total records from file: {len(records)}")
             print(f"      • Unique dropdown fields: {len(all_dropdown_names_by_company[company])}")
             
-            # Filter out unwanted dropdown names FIRST (before mapping)
+            # Load mappings FIRST so we can build an effective skip set.
+            # A portal display name in SKIP_DROPDOWN_NAMES is only skipped when it
+            # has NO valid non-skip DB mapping (e.g. Al Sagr "Network" → "Plan_Selection"
+            # must pass through; generic "Network" with no mapping stays skipped).
+            mappings = load_dropdown_mappings(db, company)
+            if mappings:
+                effective_skip_names = {
+                    name for name in SKIP_DROPDOWN_NAMES
+                    if mappings.get(name, name) in SKIP_DROPDOWN_NAMES
+                }
+            else:
+                effective_skip_names = SKIP_DROPDOWN_NAMES
+
+            # Filter out unwanted dropdown names (using the mapping-aware skip set)
             filtered_records = [
-                r for r in records 
-                if r.get("Dropdown_Name", "") not in SKIP_DROPDOWN_NAMES
+                r for r in records
+                if r.get("Dropdown_Name", "") not in effective_skip_names
             ]
             skipped = len(records) - len(filtered_records)
             if skipped > 0:
                 print(f"      • Skipped {skipped} rows (empty/unwanted fields)")
-            
-            # Apply mapping only to filtered records
-            mappings = load_dropdown_mappings(db, company)
+
+            # Apply mapping to filtered records
             if mappings:
                 # Use ONLY_UPLOAD_MAPPED to control whether unmapped records are included
                 records_to_upload, mapped, unmapped, applied_mappings, unmapped_names = apply_dropdown_mapping(

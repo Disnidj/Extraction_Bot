@@ -6,9 +6,11 @@ Output Format matches database schema:
 - One row per Selection_Value (flat structure)
 - Fields: Company, TPA, Network, Region, Dropdown_Name, Selection_Value
 
-Key Mappings:
-- Portal's "Plan" (plan names) → DB's "Network" column & "Network" dropdown
-- Portal's "Network" (RN, GN) → DB's "Plan_Selection" dropdown (Dropdown_Name, not column)
+IMPORTANT: Dropdown_Name must be PORTAL DISPLAY NAME (as stored in mapping table)
+- Example: "Aggregate Limit", "Nursing Home", "Consult.Ded"
+- NOT database names like "Annual", "HomeNursing", "Deductable"
+
+This matches how ADNIC and Orient Aura formatters work.
 """
 
 import os
@@ -19,9 +21,16 @@ from src.services.formatter_service import expand_empty_tpa_network
 from src.utils.logger import alsagr_logger
 from .mapping import PORTAL_NAME, PORTAL_REGION, FIELD_MAPPING, COMPANY_NAME
 
-# Create reverse mapping: Portal_Field_Name (display) -> Dropdown_Name
-# e.g., "Plan" -> "Network", "Network" -> "Plan_Selection"
-DISPLAY_NAME_TO_DROPDOWN = {v[1]: v[0] for k, v in FIELD_MAPPING.items()}
+# ============================================================================
+# DATABASE NAME → PORTAL DISPLAY NAME MAPPING
+# The mapping table has Portal Display Names in AL SAGR column
+# Extractor outputs Database Names, so we convert them here
+# ============================================================================
+
+# From FIELD_MAPPING: api_field: (Database_Name, Portal_Display_Name, MapID)
+# Create: Database_Name → Portal_Display_Name
+DB_TO_PORTAL_DISPLAY = {v[0]: v[1] for k, v in FIELD_MAPPING.items()}
+# Result: {"Annual": "Aggregate Limit", "HomeNursing": "Nursing Home", ...}
 
 
 class AlSagrFormatter:
@@ -31,6 +40,8 @@ class AlSagrFormatter:
     Output format matches database schema:
     {"Company": "AL SAGR...", "TPA": "...", "Network": "...", 
      "Region": "...", "Dropdown_Name": "...", "Selection_Value": "..."}
+    
+    IMPORTANT: Dropdown_Name is Portal Display Name (for mapping table lookup)
     
     Files are saved to: {output_dir}/alsagr/alsagr_extracted_YYYYMMDD_HHMMSS.txt
     """
@@ -103,9 +114,10 @@ class AlSagrFormatter:
             # Check for various field name formats
             field_name = data.get("field name", data.get("field_name", data.get("Dropdown_Name", "")))
             
-            # Map display name to database Dropdown_Name
-            # e.g., "Plan" -> "Network", "Network" -> "Plan_Selection"
-            dropdown_name = DISPLAY_NAME_TO_DROPDOWN.get(field_name, field_name)
+            # Convert Database Name → Portal Display Name (for mapping table lookup)
+            # Extractor outputs DB names like "Annual", "HomeNursing"
+            # Mapping table expects Portal Display like "Aggregate Limit", "Nursing Home"
+            dropdown_name = DB_TO_PORTAL_DISPLAY.get(field_name, field_name)
             
             values = data.get("values", [])
             
@@ -129,6 +141,11 @@ class AlSagrFormatter:
             
             # Remove Plan_Selection if present (not in DB schema)
             record.pop("Plan_Selection", None)
+            
+            # Convert Database Name → Portal Display Name for mapping table
+            if "Dropdown_Name" in record:
+                db_name = record["Dropdown_Name"]
+                record["Dropdown_Name"] = DB_TO_PORTAL_DISPLAY.get(db_name, db_name)
             
             if not record.get("Region"):
                 record["Region"] = PORTAL_REGION
