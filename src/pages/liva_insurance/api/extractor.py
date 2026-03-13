@@ -14,6 +14,7 @@ Extraction Strategy:
 """
 
 import asyncio
+import re
 from typing import Dict, List, Tuple
 from patchright.async_api import Page
 from src.utils.logger import liva_insurance_logger
@@ -28,6 +29,23 @@ from .mapping import (
     PORTAL_NAME,
     PORTAL_REGION,
 )
+
+
+TARGET_REGION_NAME = "DXB / NE"
+
+
+def _normalize_region_text(value: str) -> str:
+    """Normalize region labels so minor formatting differences still match."""
+    return re.sub(r"[^A-Z0-9]", "", (value or "").upper())
+
+
+def _is_target_region(option: DropdownOption) -> bool:
+    """Match DXB/NE formatting variants while preserving API-extracted values."""
+    target_normalized = _normalize_region_text(TARGET_REGION_NAME)
+    name_normalized = _normalize_region_text(option.name)
+    value_normalized = _normalize_region_text(option.value)
+
+    return name_normalized == target_normalized or value_normalized == target_normalized
 
 
 class LivaInsuranceApiExtractor:
@@ -107,6 +125,29 @@ class LivaInsuranceApiExtractor:
             )
             if api["endpoint"] == "GetDropDownRegion":
                 regions = options
+
+        # Enforce DXB/NE-only mode after fetching all available regions.
+        original_count = len(regions)
+        available_region_names = [r.name for r in regions]
+        regions = [r for r in regions if _is_target_region(r)]
+        filtered_out = original_count - len(regions)
+
+        if available_region_names:
+            liva_insurance_logger.debug(
+                f"Available regions for TPA {tpa.name}: {available_region_names}"
+            )
+
+        if regions:
+            selected_region_names = [r.name for r in regions]
+            liva_insurance_logger.debug(
+                f"Selected regions for TPA {tpa.name} after filter: {selected_region_names}"
+            )
+
+        if filtered_out > 0:
+            print(f"   🔎 Region filter active ({TARGET_REGION_NAME}): excluded {filtered_out} region(s)")
+            liva_insurance_logger.debug(
+                f"Region filter active ({TARGET_REGION_NAME}): excluded {filtered_out} region(s) for TPA {tpa.name}"
+            )
 
         self.stats["region_count"] += len(regions)
         print(f"   📋 Regions available: {len(regions)}")
