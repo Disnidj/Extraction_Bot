@@ -1,0 +1,79 @@
+MapID,Dropdown_Name,NLGIC
+1,TPA,TPA
+2,Region,Region
+3,Network,Network
+4,Annual,"Plan Annual Limit"
+5,Terotory,"Geographical Area of Cover"
+6,HomeNursing,"Home Nursing Charges"
+7,Accomafdation(room),"Hospital accommodation, room and board"
+8,Deductable,Deductible
+9,SpecialistAccess,"Specialist Access"
+10,RadiologyandDiagnostic,"Co-pay Lab / Radiology and Diagnostics"
+11,ofpahamacy,"Pharmacy Limit"
+12,Phamacy,"Pharmacy Co-Pay"
+13,Pysio,"Physiotherapy Limit"
+14,PhysioCo,"Physiotherapy Co-Pay"
+15,Metanity,"Maternity Benefit Limit"
+16,MetanityCo,"Maternity Benefit Co-Pay"
+17,MaternityMarriedFemalesIp,"Maternity Benefit IP Co-pay"
+18,Renal,"Renal Dialysis"
+19,Organ,"Organ Transplantation"
+20,Dental,"Dental Benefit Limit"
+21,Dental(Co),"Dental Benefit Co-Pay"
+22,Optical,"Optical Benefit Limit"
+23,optical(Co),"Optical Benefit Co-Pay"
+24,Alternativemedecine,"Alternative Medicine Benefit Limit"
+25,AlternativeCoPay,"Alternative Medicine Benefit Co-Pay"
+26,Psycharaty,"Psychiatric Benefit"
+27,Motal,"Repatriation of mortal remains"
+28,America,"International Assistance"
+29,Telehealth,Teleconsultation
+30,Airfare_for_IP_Treatment,NULL
+31,Alternative_treatment_limit,NULL
+32,BrokerCommission,NULL
+33,Business_Nature,NULL
+34,Congenital_Condition_Sublimit,NULL
+35,Consultation_Limit,NULL
+36,coPaymentDiagnostics,NULL
+37,CopaymentonDiagnostics,NULL
+38,Critical_Illness,NULL
+39,Daily_Cash_Benefit,NULL
+40,Dental_Optical,NULL
+41,DiagnosticCopay,NULL
+42,Dialysis_Sublimit,NULL
+43,Disability_benefits,NULL
+44,Group_Life,NULL
+45,Health,NULL
+46,InpatientCo_pay,NULL
+47,IP_Coinsurance,NULL
+48,Lab&X-Ray,NULL
+49,Lab_n_Diagnostics_copay,NULL
+50,Lab_n_Diagnostics_limit,NULL
+51,lifebenefit,NULL
+52,Maternity_In_patient_copay,NULL
+53,Maternity_In_patient_limit,NULL
+54,Maternity_Out_patient_copay,NULL
+55,Maternity_Out_patient_limit,NULL
+56,MaternityNewborn,NULL
+57,Medical_Appliances_Sublimit,NULL
+58,New_born_cover,NULL
+59,Occupational_Class,NULL
+60,OutPatient,NULL
+61,Personal_Accident,NULL
+62,Pharmacy_Sublimit,NULL
+63,Plan_Selection,NULL
+64,PreExisting_and_Chronic_Conditions,NULL
+65,Premium_Frequency,NULL
+66,Reimbursement,NULL
+67,RoomCategory,NULL
+68,Second_Medical_Opinion,NULL
+69,"Shiniqnx Vaccine",NULL
+70,SubPlan,NULL
+71,Welness,NULL
+72,Quotation_For,NULL
+73,Policy_Holder_Type,NULL
+74,Terotory_Emergency,NULL
+75,Excess,
+76,NetworkType,
+77,PaymentFrequency,
+78,QuoteOption,

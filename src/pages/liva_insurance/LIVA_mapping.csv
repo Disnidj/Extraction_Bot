@@ -1,0 +1,30 @@
+MapID,Dropdown_Name,Liva Insurance
+1,TPA,TPA Name
+2,Region,Region
+3,Network,Network
+4,Annual,Plan Annual Limit
+5,Terotory,Geographical Area of Cover
+6,HomeNursing,Home Nursing Charges
+7,Accomafdation(room),"Hospital accommodation, room and board"
+8,Deductable,Deductible
+9,SpecialistAccess,Specialist Access
+10,RadiologyandDiagnostic,Co-pay Lab / Radiology and Diagnostics
+11,ofpahamacy,Pharmacy Limit
+12,Phamacy,Pharmacy Co-Pay
+13,Pysio,Physiotherapy Limit
+14,PhysioCo,Physiotherapy Co-Pay
+15,Metanity,Maternity Benefit Limit
+16,MetanityCo,Maternity Benefit OP Co-pay
+17,MaternityMarriedFemalesIp,Maternity Benefit IP Co-pay
+18,Renal,Renal Dialysis
+19,Organ,Organ Transplantation
+20,Dental,Dental Benefit Limit
+21,Dental(Co),Dental Benefit Co-Pay
+22,Optical,Optical Benefit Limit
+23,optical(Co),Optical Benefit Co-Pay
+24,Alternativemedecine,Alternative Medicine Benefit Limit
+25,AlternativeCoPay,Alternative Medicine Benefit Co-Pay
+26,Psycharaty,Psychiatric Benefit
+27,Motal,Repatriation of mortal remains
+28,America,International Assistance
+29,Telehealth,Teleconsultation

@@ -84,6 +84,10 @@ NLG_GENERATED_CENSUS_DIR = config['NLG']['generated_census_dir']
 NLG_TEMPLATES_DIR = config['NLG']['templates_dir']
 NLG_QUOTATION_DIR = config['NLG']['quotation_download_dir']
  
+LIVA_INSURANCE_USERNAME = config['liva_insurance']['username']
+LIVA_INSURANCE_PASSWORD = config['liva_insurance']['password']
+LIVA_INSURANCE_GENERATED_CENSUS_DIR = config['liva_insurance']['generated_census_dir']
+ 
 DUBAIINSURANCE_USERNAME = config['dubaiinsurance']['username']
 DUBAIINSURANCE_PASSWORD = config['dubaiinsurance']['password']
 DUBAIINSURANCE_GENERATED_CENSUS_DIR = config['dubaiinsurance']['generated_census_dir']

@@ -34,7 +34,8 @@ COMPANY_MAPPING = {
     18: "MaxHealth",
     19: "Orient Aura",
     20: "Liva Globalcare",
-    21: "QIC HealthX Exclusive"
+    21: "QIC HealthX Exclusive",
+    22: "Liva Insurance"
 }
 
 # Mapping between company names and portal function names
@@ -59,7 +60,8 @@ COMPANY_TO_FUNCTION_MAPPING = {
     "Orient Aura": "Orient Aura",
     "Liva Globalcare": "NLGI Aura",
     "QIC HealthX Exclusive": "QIC HealthX Exclusive",
-    "AL SAGR INSURANCE COMPANY": "AL SAGR"
+    "AL SAGR INSURANCE COMPANY": "AL SAGR",
+    "Liva Insurance": "Liva Insurance"
 
 }
 
@@ -78,7 +80,8 @@ API_ENABLED_COMPANIES = [
     "Orient Aura",              # #19
     "Liva Globalcare",          # #20 (NLGI Aura)
     "AL SAGR INSURANCE COMPANY", # #6
-    "QIC HealthX Exclusive"     # #21
+    "QIC HealthX Exclusive",     # #21
+    "Liva Insurance"             # #22
 ]
 
 

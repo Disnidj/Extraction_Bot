@@ -147,6 +147,12 @@ adnic:
   templates_dir: "company_data/adnic/templates"
   quotation_download_dir: "company_data/adnic/quotation_sheets"
 
+liva_insurance:
+  username: "VIVA"
+  password: "Viva@123"
+  generated_census_dir: "company_data/liva_insurance/generated_census"
+  templates_dir: "company_data/liva_insurance/templates"
+
 ngi:
   email: ""
   password: ""
@@ -267,7 +273,7 @@ poppler:
   path: "external_programs/poppler-24.08.0/Library/bin"
 
 captcha:
-  api_key: "7da6201c72dca5a9798203eec1d6bb66"
+  api_key: "a415a803fb667f8e233492309db11c99"
 
 modes:
   headless: false
